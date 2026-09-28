@@ -194,13 +194,23 @@ humano pode ser poupado mantendo um risco conhecido e controlado.
 Depois do Arm 1, selecionamos no máximo 20 perguntas aceites automaticamente,
 sobretudo em `DROP`, onde o artigo descreve o *first-event bias*.
 
-Aplicamos uma transformação temporal controlada, como trocar “o que aconteceu
-primeiro?” por “o que aconteceu segundo?”, quando a resposta for verificável, e
-uma transformação placebo, como acrescentar uma frase neutra.
+O objetivo deste teste não é reavaliar se a pergunta original é boa, mas
+colocar à prova a premissa central do nosso próprio auditor: avaliar se a
+concordância e a semelhança entre modelos constituem um sinal suficiente de
+correção. Quando vários modelos partilham o mesmo viés indutivo, podem convergir
+no mesmo erro com explicações coerentes entre si, criando um consenso falso
+que o score aceitaria indevidamente.
+
+Para expor essa potencial fragilidade, aplicamos uma transformação temporal
+controlada, como trocar “o que aconteceu primeiro?” por “o que aconteceu
+segundo?”, quando a resposta for verificável, e uma transformação placebo, como
+acrescentar uma frase neutra. Medimos a taxa de quebra desse consenso
+(*consensus-break rate*).
 
 As novas perguntas não estão na cache original. Este pequeno stress test requer
-um modelo local leve ou cache adicional. É uma validação de robustez, não a
-contribuição principal, e não bloqueia a conclusão do Arm 1.
+um modelo local leve ou cache adicional. É uma validação de robustez e uma
+análise de ameaças à validade, não a contribuição principal, e não bloqueia a
+conclusão do Arm 1.
 
 ## Plano de trabalho
 
