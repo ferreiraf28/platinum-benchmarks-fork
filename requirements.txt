@@ -1,6 +1,21 @@
+# Official base dependencies
 anthropic>=0.40.0
 datasets>=3.1.0
 huggingface_hub>=0.27.1
 openai>=1.59.7
 pandas>=1.4.1
 python-dotenv>=1.0.1
+
+# Selective Auditor, Modeling & Math dependencies
+scikit-learn>=1.0.0
+scipy>=1.8.0
+numpy>=1.22.0
+
+# Visualization & Reporting
+matplotlib>=3.5.0
+seaborn>=0.12.0
+
+# Testing & Reproducibility
+pytest>=7.0.0
+jupyter>=1.0.0
+ipykernel>=6.0.0
