@@ -75,7 +75,7 @@ To maintain absolute scientific validity, the code is strictly separated into tw
 
 | Step | Focus Area | Key Deliverables | Validation Target | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| **Step 1** | Environment & Offline Loader | Cache downloaded; `src/offline_loader.py`; `src/inventory.py` | 0 API calls; complete cache inventory report | `[ ]` |
+| **Step 1** | Environment & Offline Loader | Cache downloaded; `src/offline_loader.py`; `src/inventory.py` | 0 API calls; complete cache inventory report | `[x]` |
 | **Step 2** | Prediction Parsers & Uncertainty Signals | `src/signals.py` (Majority, Entropy, TF-IDF CoT, Length, Hedging) | Unit tests pass; all signals bounded in $[0, 1]$ | `[ ]` |
 | **Step 3** | Selective Auditor Engine & Baselines | `src/auditor.py` ($S_{\text{maj}}, S_{\text{ent}}, S_{\text{comb}}, S_{\text{gate}}$) | Decision policy verified; mandatory deferral on incomplete cache | `[ ]` |
 | **Step 4** | Dev/Eval Split Protocol & Layer 1 Evaluation | `src/evaluation.py`; threshold $\tau$ calibration; RC Curves & AURC | **Table 1** generated for core benchmarks (`gsm8k`, `svamp`, `drop`) | `[ ]` |
@@ -108,18 +108,18 @@ In Step 1, we build a bulletproof, network-isolated data loader (`OfflineDataLoa
   If an example does not have answers for all target models ($K_i < K_{\text{target}}$), flag `incomplete_cache = True`. It must **never** be silently treated as a consensus.
 
 #### 1.3 Step-by-Step Action Items
-- [ ] 1. Verify virtual environment and install dependencies (`datasets`, `huggingface_hub`, `pandas`, `scikit-learn`, `matplotlib`, `scipy`).
-- [ ] 2. Run `bash scripts/download_paper_cache.sh` to populate `./cache/` with `.pkl` files.
-- [ ] 3. Implement `src/offline_loader.py`:
-  - [ ] Strict binary loading (`open(..., 'rb')`).
-  - [ ] Canonical key generation matching `src/utils.py` and `src/models.py`.
-  - [ ] No API client imports (`openai`, `anthropic`, `google.genai`).
-  - [ ] Clear error and status tracking (`FOUND`, `MISSING_IN_CACHE`).
-- [ ] 4. Implement `src/inventory.py`:
-  - [ ] Load Hugging Face dataset `madrylab/platinum-bench-paper-version`.
-  - [ ] Iterate through primary benchmarks: `gsm8k`, `svamp`, `drop`.
-  - [ ] Produce coverage matrix: total questions, valid questions (`cleaning_status != 'rejected'`), models available per question ($K_i$).
-- [ ] 5. Run inventory and save report to `outputs/tables/cache_inventory.csv`.
+- [x] 1. Verify virtual environment and install dependencies (`datasets`, `huggingface_hub`, `pandas`, `scikit-learn`, `matplotlib`, `scipy`).
+- [x] 2. Run `bash scripts/download_paper_cache.sh` to populate `./cache/` with `.pkl` files.
+- [x] 3. Implement `src/offline_loader.py`:
+  - [x] Strict binary loading (`open(..., 'rb')`).
+  - [x] Canonical key generation matching `src/utils.py` and `src/models.py`.
+  - [x] No API client imports (`openai`, `anthropic`, `google.genai`).
+  - [x] Clear error and status tracking (`FOUND`, `MISSING_IN_CACHE`).
+- [x] 4. Implement `src/inventory.py`:
+  - [x] Load Hugging Face dataset `madrylab/platinum-bench-paper-version`.
+  - [x] Iterate through primary benchmarks: `gsm8k`, `svamp`, `drop`.
+  - [x] Produce coverage matrix: total questions, valid questions (`cleaning_status != 'rejected'`), models available per question ($K_i$).
+- [x] 5. Run inventory and save report to `outputs/tables/cache_inventory.csv`.
 
 #### 1.4 Verification Tests
 ```bash
@@ -443,3 +443,12 @@ jupyter nbconvert --to notebook --execute notebook.ipynb --output notebook_execu
 - **Action:** Created `docs/project_guide.md` in English following complete methodological specification from `docs/project_proposal.md`.
 - **Key Decision:** Confirmed zero-API design: all operations rely strictly on local `.pkl` caches from `madrylab/platinum-bench-paper-cache`.
 - **Next Immediate Action:** Begin Step 1: verify environment dependencies and download paper cache.
+
+### Entry 002 — Step 1 Completed: Offline Infrastructure & Sanity Audit (2026-10-24)
+- **Action:** Downloaded all 15 cache `.pkl` files (99.9 MB) via enhanced `scripts/download_paper_cache.sh`. Implemented `src/offline_loader.py` with strict zero-network execution and canonical 4-tuple key reconstruction.
+- **Verification:** Created and executed unit tests in `tests/test_offline_loader.py` (7/7 tests passed in 0.014s). Ran `src/inventory.py` on core datasets (`gsm8k`, `svamp`, `drop`).
+- **Empirical Findings:**
+  - Cache coverage across all 24 paper models is 100.0% for all three core benchmarks (`gsm8k`: 274/274 valid examples have all 24 models; `svamp`: 273/273; `drop`: 209/209).
+  - Parsing success rate is >= 99.97% across available responses (only 2 parse errors in `gsm8k`, 1 in `svamp`, 0 in `drop`).
+  - Report saved to `outputs/tables/cache_inventory.csv`.
+- **Next Immediate Action:** Begin Step 2: implement observable uncertainty signals extraction in `src/signals.py`.

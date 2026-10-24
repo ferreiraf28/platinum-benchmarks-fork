@@ -50,3 +50,7 @@ Thumbs.db
 # Project-specific caches & generated artifacts
 cache/
 outputs/
+
+# Agent-specific customizations & rules
+.agents/
+
