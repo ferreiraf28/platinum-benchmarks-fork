@@ -337,25 +337,33 @@ $$D_\tau(x) = \begin{cases}
 - The split is stratified by dataset and vote margin, ensuring representative difficulty distributions in both partitions, with a deterministic seed (`seed=42`).
 
 ### 5.5 Methodological Variant: Selective Auditor with Prior Label Safety Gate
-In the industrial curation of existing benchmarks, curators often possess the dataset's legacy label prior to review ($y_{\text{legacy}}$). While our primary auditor is designed for strictly blind operation (applicable to newly formulated tasks without prior annotation), we formalize a **conservative Safety Gate variant**:
+In the industrial curation of existing benchmarks, curators often possess the dataset's legacy label prior to review ($y_{\text{legacy}}$). While our primary auditor operates in strictly blind mode (applicable to newly formulated tasks without prior ground truth), we formalize an external **Safety Gate variant**:
 
 ```python
-def selective_auditor_with_label_gate(example, predictions, tau, y_legacy):
+def selective_auditor_with_label_gate(example, predictions, tau, y_legacy, gate_mode="majority"):
     # Safety Gate based on Legacy Label
     if y_legacy is not None:
-        # If any model disagrees with the inherited legacy label
-        if any(pred != y_legacy for pred in predictions):
+        y_maj = compute_modal_prediction(predictions)
+        
+        # Default: Modal Consensus Disagreement
+        # Triggers mandatory review only if the winning ensemble prediction overturns legacy label.
+        # This prevents minority slips (e.g. 1 out of 24 models with a typo) from causing audit spikes.
+        if gate_mode == "majority" and y_maj != y_legacy:
             return "DEFER_TO_HUMAN_MANDATORY"
             
-    # In case of unanimous agreement with legacy label (or in absence of label)
-    # apply standard blind uncertainty score
+        # Paper Baseline: Strict Unanimous Disagreement
+        # Replicates Vendrow et al. (2025) where any single dissenting model forces manual review.
+        if gate_mode == "strict_unanimous" and any(pred != y_legacy for pred in predictions.values()):
+            return "DEFER_TO_HUMAN_MANDATORY"
+            
+    # If the safety gate passes, evaluate standard blind uncertainty score
     score = compute_selective_score(predictions, texts)
     if score >= tau:
         return "ACCEPT_PROVISIONALLY"
     else:
         return "DEFER_TO_HUMAN"
 ```
-*Methodological Caveat:* The Safety Gate is an external conditional control-flow module; it **does not** enter the continuous score function $S(x)$ to preserve mathematical integrity. Results for this gate variant will be reported in a dedicated comparative row.
+*Methodological Rationale:* In the original Vendrow et al. (2025) heuristic, *any* single model disagreement triggered manual review ($\exists m: \hat{y}_m \neq y_{\text{legacy}}$). As our Step 1 analysis revealed (e.g., GSM8K #2), this naive rule triggers costly human reviews on obvious 21-out-of-24 supermajorities simply because one model had a formatting typo. By making modal consensus disagreement the default safety gate (`gate_mode="majority"`), the auditor protects against genuine label corruption (e.g., when models collectively overturn a flawed legacy target as in DROP #0) while preserving high auto-acceptance rates on minor model slips. The Safety Gate acts strictly as an external control-flow filter and never corrupts the continuous score $S(x)$.
 
 ---
 

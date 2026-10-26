@@ -77,7 +77,7 @@ To maintain absolute scientific validity, the code is strictly separated into tw
 | :--- | :--- | :--- | :--- | :---: |
 | **Step 1** | Environment & Offline Loader | Cache downloaded; `src/offline_loader.py`; `src/inventory.py` | 0 API calls; complete cache inventory report | `[x]` |
 | **Step 2** | Prediction Parsers & Uncertainty Signals | `src/signals.py` (Majority, Entropy, TF-IDF CoT, Length, Hedging) | Unit tests pass; all signals bounded in $[0, 1]$ | `[x]` |
-| **Step 3** | Selective Auditor Engine & Baselines | `src/auditor.py` ($S_{\text{maj}}, S_{\text{ent}}, S_{\text{comb}}, S_{\text{gate}}$) | Decision policy verified; mandatory deferral on incomplete cache | `[ ]` |
+| **Step 3** | Selective Auditor Engine & Baselines | `src/auditor.py` ($S_{\text{maj}}, S_{\text{ent}}, S_{\text{comb}}, S_{\text{gate}}$) | Decision policy verified; mandatory deferral on incomplete cache | `[x]` |
 | **Step 4** | Dev/Eval Split Protocol & Layer 1 Evaluation | `src/evaluation.py`; threshold $\tau$ calibration; RC Curves & AURC | **Table 1** generated for core benchmarks (`gsm8k`, `svamp`, `drop`) | `[ ]` |
 | **Step 5** | Layer 2: Paper Queue Triage & Error Taxonomy | Proxy `paper_flagged`; margin analysis; error regimes | **Table 2** (queue reduction) & **Table 3** (qualitative taxonomy) | `[ ]` |
 | **Step 6** | Arm 2: Controlled Stress Test in DROP | `src/stress_test.py`; 20 DROP instances; $\mathcal{T}_{\text{temp}}$ vs $\mathcal{T}_{\text{placebo}}$ | Consensus-break rate computed on local model / test harness | `[ ]` |
@@ -212,7 +212,7 @@ We implement 4 score formulations to isolate the contribution of each signal:
    $$S_{\text{comb}}^{\text{calib}}(x) = \sigma\left(\mathbf{w}^T \mathbf{s}(x) + b\right)$$
    (Weights fitted strictly on the Dev Split).
 5. **Safety Gate Variant ($S_{\text{gate}}$):**
-   If legacy label $y_{\text{legacy}}$ is available, any model disagreement with $y_{\text{legacy}}$ triggers mandatory human review.
+   If legacy label $y_{\text{legacy}}$ is available, triggers mandatory review if the ensemble modal consensus disagrees with $y_{\text{legacy}}$ (`gate_mode="majority"`, preventing single-model typos from blocking consensus), with an optional `strict_unanimous` mode to replicate the paper's original filter.
 
 #### 3.2 Decision Policy
 For threshold $\tau \in [0, 1]$:
@@ -222,11 +222,11 @@ $$D_\tau(x) = \begin{cases}
 \end{cases}$$
 
 #### 3.3 Step-by-Step Action Items
-- [ ] 1. Create `src/auditor.py`.
-- [ ] 2. Implement class `SelectiveAuditor` supporting methods `score(signals, mode)` and `decide(score, tau, metadata)`.
-- [ ] 3. Implement `SafetyGateAuditor` wrapping the selective auditor with legacy label checks.
-- [ ] 4. Implement mandatory deferral rules for incomplete cache and parse errors.
-- [ ] 5. Write unit tests in `tests/test_auditor.py` to verify:
+- [x] 1. Create `src/auditor.py`.
+- [x] 2. Implement class `SelectiveAuditor` supporting methods `score(signals, mode)` and `decide(score, tau, metadata)`.
+- [x] 3. Implement `SafetyGateAuditor` wrapping the selective auditor with legacy label checks.
+- [x] 4. Implement mandatory deferral rules for incomplete cache and parse errors.
+- [x] 5. Write unit tests in `tests/test_auditor.py` to verify:
   - Cache miss always yields `DEFER_TO_HUMAN` regardless of score.
   - Threshold filtering acts monotonically on acceptance.
   - Safety gate flags legacy disagreements immediately.
