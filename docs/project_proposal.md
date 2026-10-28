@@ -207,43 +207,106 @@ Calculated Metrics and Diagnostics:
 ========================================================================================
 ```
 
-### 5.2 Observable Uncertainty Signal Vector
-For each question $x$ evaluated across a set of $K$ valid models in the cache, we extract the following operational signals from predictions $\hat{y}_1, \dots, \hat{y}_K$ and justification texts $R_1, \dots, R_K$:
+### 5.2 Observable Uncertainty Signal Vector: Mathematical Formulation & Justification
+To audit benchmark instances without accessing privileged ground-truth targets (`platinum_target` or `cleaning_status`), the selective auditor triangulates uncertainty across three distinct, orthogonal observational planes:
+1. **Output Space Consensus:** Discrete distributions over parsed predictions ($M(x), V(x)$).
+2. **Reasoning Space Alignment:** Lexical and derivation coherence across chain-of-thought traces ($Sim(x)$).
+3. **Behavioral & Deliberation Dynamics:** Response length dispersion and linguistic hedging ($LS(x), Hed(x)$).
 
-#### 1. Majority Ratio ($M(x)$)
-Relative frequency of the modal class (most voted answer in ensemble):
-$$M(x) = \frac{\max_{c} N_c(x)}{K}$$
-Where $N_c(x) = \sum_{k=1}^K \mathbb{I}(\hat{y}_k = c)$. For unanimous agreement ($K$ identical votes), $M(x) = 1.0$.
+For each question $x$ evaluated across a pool of $K$ valid models in the cache, we extract the following operational signals:
 
-#### 2. Entropy-Based Vote Confidence ($V(x)$)
-Computes Shannon Entropy over the empirical discrete vote distribution:
-$$H(x) = - \sum_{c \in \mathcal{C}(x)} p(c|x) \log_2 p(c|x)$$
-Where $p(c|x) = \frac{N_c(x)}{K}$ and $\mathcal{C}(x)$ is the set of unique predictions produced. To normalize values to $[0, 1]$, divide by theoretical maximum entropy $\log_2(K)$ (occurring if all models produce distinct answers):
-$$H_{\text{norm}}(x) = \frac{H(x)}{\log_2(K)}$$
-We define entropic confidence as its inverse:
-$$V(x) = 1 - H_{\text{norm}}(x)$$
-A unanimous distribution yields $H(x) = 0 \implies V(x) = 1.0$. A widely dispersed vote yields $V(x) \approx 0.0$.
+---
 
-#### 3. Semantic Textual Coherence across Justifications (*Text Similarity* — $Sim(x)$)
-Coherence across reasoning chains indicates that models converged via the same logical principle rather than formatting accidents.
-- **Justification Extraction:**  
-  For models using structured tags (such as DeepSeek-R1 with `<cot>...</cot>` or Anthropic Thinking with `<thinking>...</thinking>`), extract the inner block directly. For standard responses, split text at the last occurrence of `Answer:` and retain the preceding explanatory body. If splitting fails, use full text.
-- **Similarity Calculation:**  
-  Each justification $R_k$ is represented by its TF-IDF vector $\mathbf{v}_k \in \mathbb{R}^V$ (fitted on local dataset vocabulary). We compute the mean pairwise cosine similarity across all model pairs:
-  $$Sim(x) = \frac{2}{K(K-1)} \sum_{1 \le i < j \le K} \frac{\mathbf{v}_i \cdot \mathbf{v}_j}{\|\mathbf{v}_i\| \|\mathbf{v}_j\|}$$
-  *Methodological Caveat:* The signal measures superficial textual stability, not formal validity of logical reasoning. Textually identical justifications may propagate the same fallacy if models share identical training biases.
+#### 1. Majority Ratio ($M(x)$) — Output Space Consensus Amplitude
+- **Mathematical Formulation:**
+  Relative frequency of the modal class (the most popular parsed prediction produced by the ensemble):
+  $$M(x) = \frac{\max_{c} N_c(x)}{K}, \quad \text{where } N_c(x) = \sum_{k=1}^K \mathbb{I}(\hat{y}_k = c)$$
+  Where $\hat{y}_k$ is the canonical prediction extracted from model $k$, and $\mathbb{I}(\cdot)$ is the indicator function. Normalized strictly to $[1/K, 1.0]$. For unanimous consensus ($K$ identical votes), $M(x) = 1.0$.
+- **Theoretical Provenance & Literature:**
+  Grounded in classical social choice theory, specifically the **Condorcet Jury Theorem** (Condorcet, 1785), and foundational ensemble learning theory (Dietterich, 2000; Lakshminarayanan, Pritzel, & Blundell, *Deep Ensembles*, NeurIPS 2017).
+- **Scientific Justification & Role:**
+  Provides the primary, first-order measure of ensemble consensus amplitude. In multi-model evaluation, the probability that the modal prediction is correct scales monotonically with the size of the majority margin under independent model error assumptions.
+- **Identified Blind Spot & Why It Cannot Stand Alone:**
+  $M(x)$ considers **only the winning candidate** and discards the structure of all non-majority votes. For instance, in an ensemble of $K=24$ models:
+  - *Case A (Polarized Civil War):* 12 votes for candidate $A$ and 12 votes for candidate $B$ $\implies M(x) = 12/24 = 0.50$.
+  - *Case B (Plurality with Dispersed Glitches):* 12 votes for candidate $A$, while 12 independent models each produce a distinct typographical error or formatting slip $\implies M(x) = 12/24 = 0.50$.
+  $M(x)$ is mathematically blind to the difference between these two scenarios, treating a high-ambiguity two-way dispute identically to an overwhelming consensus surrounded by random noise.
 
-#### 4. Response Length Stability ($LS(x)$)
-Excessive dispersion in response lengths often reflects hesitation, verbose hallucination, or generator termination failures.
-Compute mean $\mu_L(x)$ and standard deviation $\sigma_L(x)$ of model response character (or word) lengths:
-$$CV_L(x) = \frac{\sigma_L(x)}{\mu_L(x) + \epsilon}$$
-$$LS(x) = \exp(-CV_L(x)) \in (0, 1]$$
-The more homogeneous the length across models, the closer $LS(x)$ is to $1.0$.
+---
 
-#### 5. Heuristic Hedging Markers ($Hed(x)$ — Exploratory Feature)
-Counts the relative frequency of epistemic uncertainty terms in reasoning texts (e.g., `however`, `assuming`, `unclear`, `ambiguous`, `cannot determine`, `it is possible`):
-$$Hed(x) = 1 - \min\left(1.0, \frac{\text{hedging term count}}{K \times \theta}\right)$$
-This signal acts as an exploratory supplementary modulator.
+#### 2. Normalized Entropy-Based Confidence ($V(x)$) — Distribution Sharpness
+- **Mathematical Formulation:**
+  Computes Shannon Entropy over the empirical discrete vote distribution $\mathcal{C}(x)$:
+  $$H(x) = - \sum_{c \in \mathcal{C}(x)} p(c|x) \log_2 p(c|x), \quad p(c|x) = \frac{N_c(x)}{K}$$
+  Where $\mathcal{C}(x)$ is the set of distinct predictions generated for question $x$. To guarantee scale invariance across benchmarks with varying ensemble sizes, we normalize $H(x)$ by the theoretical maximum entropy $\log_2(K)$ (achieved when all $K$ models produce mutually distinct answers):
+  $$H_{\text{norm}}(x) = \frac{H(x)}{\log_2(K)} \in [0.0, 1.0]$$
+  We define entropic confidence $V(x)$ as the complement of normalized entropy:
+  $$V(x) = 1 - H_{\text{norm}}(x) \in [0.0, 1.0]$$
+  A unanimous vote yields $H(x) = 0 \implies V(x) = 1.0$. A shattered distribution where every model disagrees yields $V(x) = 0.0$.
+- **Theoretical Provenance & Literature:**
+  Derived from **Shannon's Information Theory** (Shannon, 1948) and the extensive literature on predictive entropy in Bayesian Deep Learning and Selective Classification (Gal & Ghahramani, ICML 2016; Malinin & Gales, *Dirichlet Prior Networks*, NeurIPS 2018; Geifman & El-Yaniv, *SelectiveNet*, ICML 2019).
+- **Scientific Justification & Role:**
+  Directly resolves the blind spot of $M(x)$ by penalizing the dispersion of probability mass across competing candidates. 
+  - In Case A above (12 vs. 12), the probability mass is concentrated in two major rival hypotheses ($H(x) = 1.0$ bit, $V(x) \approx 0.78$).
+  - In Case B above (12 vs. 1-1-1...), the probability mass shatters across 13 distinct buckets ($H(x) \approx 2.79$ bits, $V(x) \approx 0.39$).
+  Furthermore, the logarithmic non-linearity of $-p \log p$ ensures hyper-sensitivity to the first signs of dissent: when a single model deviates from unanimous consensus ($23-1$ split), $V(x)$ smoothly registers the uncertainty ($V(x) \approx 0.945$).
+
+---
+
+#### 3. Semantic Textual Coherence across Justifications ($Sim(x)$) — Reasoning Path Alignment
+- **Mathematical Formulation & Calibrated Scaling:**
+  Let $R_k$ denote the reasoning body (Chain-of-Thought explanation) extracted from model $k \in \{1, \dots, K\}$. We represent each reasoning trace $R_k$ as a numerical vector $\mathbf{v}_k \in \mathbb{R}^{D}$ using a Term Frequency-Inverse Document Frequency (TF-IDF) vectorizer fitted dynamically on the local responses of question $x$. The raw coherence score $Sim_{\text{raw}}(x)$ is computed as the arithmetic mean of all pairwise cosine similarities across the $K$ models:
+  $$Sim_{\text{raw}}(x) = \frac{2}{K(K-1)} \sum_{1 \le i < j \le K} \frac{\mathbf{v}_i \cdot \mathbf{v}_j}{\|\mathbf{v}_i\| \|\mathbf{v}_j\|} \in [0.0, 1.0]$$
+  In matrix notation, letting $\mathbf{V} \in \mathbb{R}^{K \times D}$ be the row-normalized TF-IDF matrix ($\|\mathbf{v}_k\|_2 = 1$), the cosine similarity Gram matrix is $\mathbf{S} = \mathbf{V} \mathbf{V}^T$, and $Sim_{\text{raw}}(x)$ is computed in $\mathcal{O}(K^2)$ vector operations as the mean of the upper triangle:
+  $$Sim_{\text{raw}}(x) = \frac{1}{\binom{K}{2}} \sum_{i < j} \mathbf{S}_{ij}$$
+  *Calibrated Normalization:* Across 24 disparate model families, natural vocabulary variation and distinctive prompting headers cap raw TF-IDF similarity at $\approx 0.60$ even under unanimous reasoning convergence, while orthogonal derivations yield similarities around $\approx 0.15$. To prevent unscaled similarity from exerting an unintended downward drag on linear composite scores, we apply an affine calibration bounded on the Core Development Suite:
+  $$Sim_{\text{scaled}}(x) = \text{clip}\left(\frac{Sim_{\text{raw}}(x) - F_{\text{sim}}}{C_{\text{sim}} - F_{\text{sim}}}, 0.0, 1.0\right), \quad F_{\text{sim}} = 0.15, \; C_{\text{sim}} = 0.60$$
+- **Theoretical Provenance & Literature:**
+  Inspired by the **Self-Consistency** paradigm (Wang et al., ICLR 2023) and the foundational framework of **Semantic Uncertainty in Large Language Models** (Kuhn, Gal, & Farquhar, *Nature*, 2023; Lin, Hilton, & Evans, 2023).
+- **Scientific Justification & Role:**
+  Guards against the insidious failure mode known as **"Right for the Wrong Reasons"**: models can output the identical final answer string by lucky coincidence or compensatory arithmetic errors. If their underlying reasoning paths diverge, the instance carries latent epistemic hazard. Conversely, in open-ended text benchmarks (such as DROP), models may output syntactically distinct strings (e.g., `'25 yards'` vs `'25'`) while executing the exact same reading comprehension logic. High justification similarity confirms that the underlying reasoning mechanisms converged.
+- **Why Local TF-IDF Outperforms Dense Neural Embeddings in Benchmark Auditing:**
+  1. *The "Number Blindness" Flaw of Dense Embeddings:* Standard neural sentence encoders (such as Sentence-BERT or OpenAI `text-embedding-3`) map sentences with identical grammar and topic to adjacent points in vector space. Consequently, contradictory mathematical deductions (e.g., *"Janet makes $18"* vs. *"Janet makes $25"*) frequently receive cosine similarities $> 0.98$ in dense embedding spaces. For benchmark curation, where arithmetic precision is paramount, TF-IDF treats distinct numerical values as distinct orthographic features, properly penalizing contradictory derivations.
+  2. *Automatic Boilerplate Muting via Local IDF:* By fitting the vectorizer dynamically on the $K$ responses generated for question $x$, universal conversational filler (e.g., *"Let's think step by step"*, *"First, we calculate"*, *"Therefore, the final answer is"*) appears in nearly all $K$ documents ($df \approx K$). Local IDF scales these generic terms down toward zero, focusing the similarity calculation exclusively on problem-specific constants, intermediate calculations, and domain entities.
+  3. *Computational & Interpretability Guarantees:* TF-IDF runs strictly offline, requires zero GPU acceleration, executes in $< 1$ millisecond on CPU, and produces fully interpretable term weights for error diagnosis.
+
+---
+
+#### 4. Response Length Stability ($LS(x)$) — Deliberation Stability
+- **Mathematical Formulation & Calibrated Scaling:**
+  Let $L_k = \text{length}(R_k)$ represent the character (or word) length of the reasoning trace emitted by model $k$. We compute the empirical mean $\mu_L(x)$ and standard deviation $\sigma_L(x)$ across the ensemble:
+  $$\mu_L(x) = \frac{1}{K} \sum_{k=1}^K L_k, \quad \sigma_L(x) = \sqrt{\frac{1}{K} \sum_{k=1}^K (L_k - \mu_L(x))^2}$$
+  The dimensionless Coefficient of Variation ($CV_L$) measures relative dispersion:
+  $$CV_L(x) = \frac{\sigma_L(x)}{\mu_L(x) + \epsilon}$$
+  Where $\epsilon = 10^{-6}$ prevents zero-division. We map $CV_L(x)$ into exponential stability:
+  $$LS_{\text{raw}}(x) = \exp\left(-CV_L(x)\right) \in (0.0, 1.0]$$
+  *Calibrated Normalization:* Because different model architectures inherently exhibit different verbosity baselines (e.g., native reasoning models like DeepSeek-R1 vs compact instruction-tuned models like Haiku), raw length stability across 24 models empirically spans $[0.10, 0.60]$. To establish commensurate dynamic range across signals, we calibrate fixed reference bounds:
+  $$LS_{\text{scaled}}(x) = \text{clip}\left(\frac{LS_{\text{raw}}(x) - F_{\text{LS}}}{C_{\text{LS}} - F_{\text{LS}}}, 0.0, 1.0\right), \quad F_{\text{LS}} = 0.10, \; C_{\text{LS}} = 0.60$$
+  If all models produce derivations of comparable length, $CV_L \to 0 \implies LS(x) \to 1.0$. High variance in response lengths drives $LS(x)$ toward $0.0$.
+- **Theoretical Provenance & Literature:**
+  Derived from generation dynamics and hallucination detection research, notably **SelfCheckGPT** (Manakul, Liusie, & Gales, EMNLP 2023) and studies on deliberation length under uncertainty (Kadavath et al., 2022).
+- **Scientific Justification & Role:**
+  Acts as an indicator of **cognitive and deliberation stability**. When an elementary problem is well-posed and unambiguous, frontier LLMs converge on concise, structurally similar proofs with uniform token counts. When models face ambiguous wording, contradictory premises, or unsolvable constraints, their generation dynamics fragment: some models enter repetitive hallucination loops, others produce lengthy defensive apologies, and others terminate prematurely. High length variance is an empirical signature of ensemble distress.
+
+---
+
+#### Methodological Soundness of Dev-Set Calibration
+A central methodological priority is preventing information leakage into the 12 held-out evaluation benchmarks reserved for Step 7:
+1. **Frozen Reference Bounds:** The scaling constants $(F_{\text{sim}}=0.15, C_{\text{sim}}=0.60)$ and $(F_{\text{LS}}=0.10, C_{\text{LS}}=0.60)$ are derived exclusively from the Core Development Suite ($N=850$ across `gsm8k`, `svamp`, and `drop`).
+2. **Zero Peeking at Evaluation Sets:** When evaluating out-of-distribution benchmarks in Step 7 (`squad`, `hotpotqa`, `bbh`, `tab_fact`, etc.), these exact parameters remain frozen, preserving strict zero-shot post-hoc auditing.
+3. **Equitable Signal Fusion:** Rescaling ensures that transparent linear baselines ($S_{\text{comb}}^{\text{baseline}} = \sum w_i s_i$) do not suffer from structural attenuation, enabling fair scientific ablation against parametric models ($S_{\text{comb}}^{\text{calib}}$).
+
+---
+
+#### 5. Heuristic Hedging Score ($Hed(x)$) — Verbalized Epistemic Uncertainty
+- **Mathematical Formulation:**
+  We define a curated lexicon $\mathcal{H}$ of explicit epistemic hedging markers indicative of authorial doubt (e.g., `perhaps`, `unclear`, `ambiguous`, `assume`, `cannot determine`, `it is possible`, `alternatively`, `may be`):
+  $$Hed(x) = 1.0 - \min\left(1.0, \frac{\sum_{k=1}^K \text{count}(w \in \mathcal{H} \text{ in } R_k)}{K \cdot \theta}\right) \in [0.0, 1.0]$$
+  Where $\theta = 2.0$ represents a saturation scaling constant (averaging 2 hedging markers per model maps to zero confidence).
+- **Theoretical Provenance & Literature:**
+  Anchored in the study of verbalized uncertainty and model self-knowledge (**"Language Models (Mostly) Know What They Know"**, Kadavath et al., 2022; Amodei et al., *Concrete Problems in AI Safety*, 2016; Lin, Hilton, & Evans, *Teaching Models to Express Uncertainty in Words*, TACL 2022).
+- **Scientific Justification & Role:**
+  LLMs are trained on natural language discourse where human authors systematically communicate calibration through epistemic modal markers. Even when prompt instructions force models to format a definitive `Answer: XXX`, their internal reasoning traces frequently leak their uncertainty through qualifying clauses. $Hed(x)$ captures this explicit verbalized hesitation as a dampening factor on raw voting confidence.
 
 ### 5.3 Mathematical Formulation of the Score Family
 To incrementally evaluate each component's impact, we define three baselines and the primary combined score:
@@ -274,25 +337,33 @@ $$D_\tau(x) = \begin{cases}
 - The split is stratified by dataset and vote margin, ensuring representative difficulty distributions in both partitions, with a deterministic seed (`seed=42`).
 
 ### 5.5 Methodological Variant: Selective Auditor with Prior Label Safety Gate
-In the industrial curation of existing benchmarks, curators often possess the dataset's legacy label prior to review ($y_{\text{legacy}}$). While our primary auditor is designed for strictly blind operation (applicable to newly formulated tasks without prior annotation), we formalize a **conservative Safety Gate variant**:
+In the industrial curation of existing benchmarks, curators often possess the dataset's legacy label prior to review ($y_{\text{legacy}}$). While our primary auditor operates in strictly blind mode (applicable to newly formulated tasks without prior ground truth), we formalize an external **Safety Gate variant**:
 
 ```python
-def selective_auditor_with_label_gate(example, predictions, tau, y_legacy):
+def selective_auditor_with_label_gate(example, predictions, tau, y_legacy, gate_mode="majority"):
     # Safety Gate based on Legacy Label
     if y_legacy is not None:
-        # If any model disagrees with the inherited legacy label
-        if any(pred != y_legacy for pred in predictions):
+        y_maj = compute_modal_prediction(predictions)
+        
+        # Default: Modal Consensus Disagreement
+        # Triggers mandatory review only if the winning ensemble prediction overturns legacy label.
+        # This prevents minority slips (e.g. 1 out of 24 models with a typo) from causing audit spikes.
+        if gate_mode == "majority" and y_maj != y_legacy:
             return "DEFER_TO_HUMAN_MANDATORY"
             
-    # In case of unanimous agreement with legacy label (or in absence of label)
-    # apply standard blind uncertainty score
+        # Paper Baseline: Strict Unanimous Disagreement
+        # Replicates Vendrow et al. (2025) where any single dissenting model forces manual review.
+        if gate_mode == "strict_unanimous" and any(pred != y_legacy for pred in predictions.values()):
+            return "DEFER_TO_HUMAN_MANDATORY"
+            
+    # If the safety gate passes, evaluate standard blind uncertainty score
     score = compute_selective_score(predictions, texts)
     if score >= tau:
         return "ACCEPT_PROVISIONALLY"
     else:
         return "DEFER_TO_HUMAN"
 ```
-*Methodological Caveat:* The Safety Gate is an external conditional control-flow module; it **does not** enter the continuous score function $S(x)$ to preserve mathematical integrity. Results for this gate variant will be reported in a dedicated comparative row.
+*Methodological Rationale:* In the original Vendrow et al. (2025) heuristic, *any* single model disagreement triggered manual review ($\exists m: \hat{y}_m \neq y_{\text{legacy}}$). As our Step 1 analysis revealed (e.g., GSM8K #2), this naive rule triggers costly human reviews on obvious 21-out-of-24 supermajorities simply because one model had a formatting typo. By making modal consensus disagreement the default safety gate (`gate_mode="majority"`), the auditor protects against genuine label corruption (e.g., when models collectively overturn a flawed legacy target as in DROP #0) while preserving high auto-acceptance rates on minor model slips. The Safety Gate acts strictly as an external control-flow filter and never corrupts the continuous score $S(x)$.
 
 ---
 

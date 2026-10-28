@@ -1,0 +1,4 @@
+dataset,strategy,total_examples,valid_examples,rejected_examples,target_models_K,mean_available_K,full_cache_examples,incomplete_cache_examples,cache_coverage_pct,parsing_success_pct,parsing_errors_count
+gsm8k,math,300,274,26,24,24.0,274,0,100.0,99.97,2
+svamp,math,300,273,27,24,24.0,273,0,100.0,99.98,1
+drop,text,250,209,41,24,24.0,209,0,100.0,100.0,0

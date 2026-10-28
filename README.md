@@ -9,6 +9,7 @@ This repository is a fork of the official Platinum Benchmarks codebase (*Do Larg
 >
 > All relevant project definitions, methodology, research questions, and evaluation criteria are documented in the [`docs/`](docs/) folder:
 > - **Operational Roadmap & Guide:** [`docs/project_guide.md`](docs/project_guide.md) — Step-by-step engineering playbook, validation tests, and implementation roadmap.
+> - **Findings & Presentation Report:** [`docs/report.md`](docs/report.md) — Living log of empirical conclusions, case studies, audit metrics, and slide deck takeaways.
 > - **Research Proposal & Specification:** [`docs/project_proposal.md`](docs/project_proposal.md) — Full research proposal, theoretical grounding, formal methodology, research questions, and experimental protocols.
 > - [`docs/pitch.md`](docs/pitch.md) — Executive summary and project intuition.
 > - [`docs/paper.pdf`](docs/paper.pdf) — Original research paper.

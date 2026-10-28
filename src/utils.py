@@ -1,3 +1,13 @@
+"""
+Provenance: [ORIGINAL - MODIFIED]
+Modifications:
+- Added package import fallback (`try: from models ... except ImportError: from src.models ...`) to ensure compatibility when imported from workspace root or test runner.
+
+Purpose:
+Core utilities from the original Platinum Benchmark repository, providing the base LLMCache,
+model evaluation loops, and answer parsing/checking helpers.
+"""
+
 import os
 import pickle
 import re
@@ -5,7 +15,11 @@ import time
 
 from tqdm import tqdm
 
-from models import ModelInferenceEngine, ModelEngineFactory
+try:
+    from models import ModelInferenceEngine, ModelEngineFactory
+except ImportError:
+    from src.models import ModelInferenceEngine, ModelEngineFactory
+
 import openai
 
 class LLMCache:
