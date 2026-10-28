@@ -135,16 +135,16 @@ def run_auditor_step3_audit(
     print("\nEmpirical Coverage C(tau) across Thresholds and Scoring Modes:")
     print(pivot_cov.to_string())
 
-    # Audit breakdown by benchmark at tau=0.85 on S_comb_baseline
+    # Audit breakdown by benchmark at tau=0.80 on S_comb_baseline
     print("\n" + "-" * 90)
-    print("       BENCHMARK BREAKDOWN AT TAU = 0.85 (S_comb_baseline)")
+    print("       BENCHMARK BREAKDOWN AT TAU = 0.80 (S_comb_baseline)")
     print("-" * 90)
     b_rows = []
     for b in df["benchmark"].unique():
         sub_indices = df[df["benchmark"] == b].index
         acc_b = 0
         for idx in sub_indices:
-            dec = auditor.decide(signal_records[idx], tau=0.85, mode=MODE_LINEAR_COMPOSITE)
+            dec = auditor.decide(signal_records[idx], tau=0.80, mode=MODE_LINEAR_COMPOSITE)
             if dec.is_accepted:
                 acc_b += 1
         n_b = len(sub_indices)

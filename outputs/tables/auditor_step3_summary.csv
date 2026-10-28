@@ -1,0 +1,16 @@
+mode,tau,accepted,deferred,coverage
+S_maj,0.7,255,45,0.85
+S_maj,0.8,235,65,0.7833
+S_maj,0.85,226,74,0.7533
+S_maj,0.9,211,89,0.7033
+S_maj,0.95,181,119,0.6033
+S_ent,0.7,268,32,0.8933
+S_ent,0.8,240,60,0.8
+S_ent,0.85,225,75,0.75
+S_ent,0.9,201,99,0.67
+S_ent,0.95,120,180,0.4
+S_comb_baseline,0.7,246,54,0.82
+S_comb_baseline,0.8,213,87,0.71
+S_comb_baseline,0.85,182,118,0.6067
+S_comb_baseline,0.9,77,223,0.2567
+S_comb_baseline,0.95,6,294,0.02

@@ -470,6 +470,14 @@ jupyter nbconvert --to notebook --execute notebook.ipynb --output notebook_execu
 - **Empirical Audit (GSM8K Sample N=100 via `scripts/verify_step2_signals.py`):**
   - Confirmed $Sim(x)$ has moderate correlation with $M(x)$ ($r = 0.291$), proving it captures orthogonal reasoning alignment rather than being a redundant proxy for vote counts.
   - Demonstrated that behavioral signals directly flag defective/broken prompts (`status: rejected`): on rejected instances, Hedging drops from $0.953 \to 0.777$ and Length Stability drops from $0.446 \to 0.365$.
-  - Data exported to `outputs/tables/signals_gsm8k_sample_100.csv` and documented in `docs/report.md`.
-- **Next Immediate Action:** Begin Step 3: Implement Selective Auditor Engine and Baselines ($S_{\text{maj}}, S_{\text{ent}}, S_{\text{comb}}, S_{\text{gate}}$) in `src/auditor.py`.
+- **Next Immediate Action:** Completed Step 3: Implement Selective Auditor Engine and Baselines ($S_{\text{maj}}, S_{\text{ent}}, S_{\text{comb}}, S_{\text{gate}}$) in `src/auditor.py`.
+
+### Entry 004 — Step 3 Completed: Selective Auditor Engine, Decision Policy & Baseline Sweep (2026-10-26)
+- **Action:** Implemented `SelectiveAuditor` and `SafetyGateAuditor` in `src/auditor.py`. Supports 4 scoring modes ($S_{\text{maj}}, S_{\text{ent}}, S_{\text{comb}}^{\text{baseline}}, S_{\text{comb}}^{\text{calib}}$) and the external Safety Gate ($S_{\text{gate}}$), enforcing mandatory human deferral on cache dropouts and parsing failures.
+- **Verification:** Implemented 17 automated unit tests in `tests/test_auditor.py` covering cache enforcement, threshold monotonicity, safety gate interception, and `.fit_calibrated()` interface integrity. Full test suite passes (40/40 tests repository-wide).
+- **Empirical Baseline Audit (`scripts/verify_step3_auditor.py` on $N=300$ Pooled Suite):**
+  - Swept thresholds $\tau \in [0.70, 0.95]$ across scoring modes. Confirmed that single-signal baselines ($S_{\text{maj}}, S_{\text{ent}}$) are dangerously over-optimistic at strict thresholds ($\tau=0.95$ coverage: $60.3\%$ and $40.0\%$), whereas $S_{\text{comb}}^{\text{baseline}}$ collapses properly to $2.0\%$ to enforce conservatism.
+  - At operational midpoint $\tau = 0.80$, our auditor strictly outperforms the base paper's 24/24 heuristic across all benchmarks: GSM8K ($91.0\%$ vs $81.0\%$), SVAMP ($93.0\%$ vs $87.0\%$), and DROP ($29.0\%$ blind / $17.0\%$ gated vs $13.0\%$), achieving $71.0\%$ pooled blind coverage ($67.0\%$ gated) vs. $60.3\%$ for the paper baseline.
+  - Results exported to `outputs/tables/auditor_step3_summary.csv` and documented in `docs/report.md`.
+- **Next Immediate Action:** Begin Step 4: Stratified 50/50 Dev/Eval split protocol, supervised logistic calibration, out-of-sample risk-coverage evaluation, and Table 1 generation in `src/evaluation.py`.
 

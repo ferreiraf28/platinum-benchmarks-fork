@@ -47,10 +47,7 @@ htmlcov/
 *.DS_Store
 Thumbs.db
 
-# Project-specific caches & generated artifacts
+# Project-specific local caches (large binary pickles downloaded via download_paper_cache.sh)
 cache/
-outputs/
 
-# Agent-specific customizations & rules
-.agents/
 
