@@ -159,8 +159,90 @@ The optimal scoring formulation (baseline vs. calibrated) and the definitive ope
 ---
 
 ## Step 4: Layer 1 Evaluation (Risk-Coverage & AURC)
-- *(Empirical coverage, selective risk, and Table 1 results on Eval Split to be recorded upon completion)*
-
+ 
+> **Status: implemented and reproduced; error definition pending group approval.** All numbers below use the `curation` error definition (see *Error Definition Decision*). The original definition remains available via `--error-def label`.
+ 
+### Pipeline Architecture & Hermetic Protocol
+Two-stage pipeline, validated by 25/25 unit tests in [tests/test_evaluation.py](/tests/test_evaluation.py) (65/65 repository-wide):
+1. **Export ([scripts/export_eval_table.py](/scripts/export_eval_table.py)):** One row per question (all 850, incl. `rejected`). Column prefixes encode the access layer:
+   - *No prefix (blind):* the 5 signals, `y_maj`, vote counts (`modal_count`, `second_count`, `vote_margin`), parse/cache flags, per-model predictions.
+   - `legacy_*`: inherited `original_target`; readable only by $S_{\text{gate}}$.
+   - `label_*`: `cleaning_status`, `platinum_target`, `is_correct` (via the paper's `check_prediction`, guarded against `PARSING_ERROR` inputs); evaluation layer only.
+2. **Evaluation ([src/evaluation.py](/src/evaluation.py)):**
+   - `compute_scores()` receives only the blind projection and raises on any `label_*` column.
+   - `build_error_labels()` is the single function that reads `label_*` columns.
+   - **Split:** 50/50, `seed=42`, stratified by dataset × blind margin bin (`unanimous` $M=1$; `high` $0.75 \le M < 1$; `low` $M < 0.75$). Dev 425 / Eval 425 (GSM8K 150/150, SVAMP 149/151, DROP 126/124; unanimous 166/166, high 192/193, low 67/66). Assignment exported to `outputs/tables/step4_split_assignment.csv`.
+   - **Dev-only fitting:** $S_{\text{comb}}^{\text{calib}}$ (logistic, liblinear, L2, $C=1$, features $[M, V, Sim, LS, Hed]$, target = safe to accept). Thresholds $\tau_{0.05}, \tau_{0.01}$ chosen on **5-fold cross-fitted** (out-of-fold) Dev scores to avoid optimistic selection; the final model is refit on the full Dev split and frozen.
+   - **Leakage test:** inverting every Eval label leaves all weights and thresholds unchanged (`TestHermeticSeparation`).
+   - **Reproducibility:** identical Table 1 obtained on two independent environments (macOS/conda and Linux) from the same export.
+### Error Definition Decision (Pending Group Approval)
+- **Original definition is degenerate on the core suite.** $\hat{y}_{\text{maj}} \neq y^*$ occurs on only **3 / 756** valid questions (GSM8K #288, SVAMP #261, DROP #143), i.e. ~1–2 errors per split. Consequences:
+  - The logistic fit fails (Dev holds 1 error; `StratifiedKFold` and `LogisticRegression` require both classes).
+  - Unrestricted acceptance already yields 0.53% risk, so $\tau_{0.05}$ and $\tau_{0.01}$ collapse to "accept everything" for every method.
+  - AURC differences between methods are driven by 1–2 questions.
+- **Adopted definition (`curation`):** population = all 850 questions;
+  $$e(x) = \mathbb{I}\big(\text{rejected}(x)\big) \lor \mathbb{I}\big(\hat{y}_{\text{maj}}(x) \neq y^*(x)\big)$$
+  An auto-accepted question is a curation failure if it required a human, either because its consensus label is wrong or because the question itself is defective. This mirrors the two outcomes of the paper's manual review (`revised` label vs. `rejected` question).
+- **Error composition:** 97 errors / 850 (11.4%) = 94 `rejected` + 3 majority errors. Dev 46 (GSM8K 9, SVAMP 13, DROP 24) / Eval 51 (GSM8K 18, SVAMP 15, DROP 18).
+- **Note on `rejected` targets:** `rejected` rows still carry a `platinum_target` in the HF release (majority matches it on 46/94), but it was never validated; under `curation` it is ignored.
+- **Verification-bias caveat:** the paper only inspected questions where at least one model diverged. Unanimous questions were labelled `consensus` without review, so they cannot be `rejected` by construction. Empirically **0 / 332** unanimous questions are errors, versus 43/385 `high` and 54/133 `low`. Errors hidden behind unanimous consensus (Regime 4.3/4.4) are unobservable under both definitions; this motivates Arm 2.
+### Metric Implementation Decisions
+- **Tie handling:** score ties are frequent (166 unanimous Eval questions share $S_{\text{maj}} = S_{\text{ent}} = 1$). Within a tied block of $n_g$ questions with $e_g$ errors, accepting $j$ of them contributes $j \cdot e_g / n_g$ expected errors. This is the exact expectation under uniform random tie-breaking, i.e. the limit of averaging infinitely many seeded tie-breaks, with no sampling noise.
+- **Curve and AURC:** $R(k/N)$ for $k = 1..N$; $\text{AURC} = \int R\,dC$ by the trapezoidal rule. *Random Abstention* = constant score (one tie block: flat risk at the base rate). *Oracle* = errors ranked last (lower bound for the given error rate).
+- **Mandatory deferrals and gate:** parse errors / incomplete cache (7 questions, 4 of them errors) and gate triggers receive $S = -\infty$. They are never accepted at an operating point and are ranked last in the curve. `coverage_max` reports the highest achievable coverage.
+- **Operating points:** risk at $C = 75\%$ uses the tie-aware curve; $\tau$-based points apply the deterministic rule $S(x) \ge \tau$ (ties accepted together).
+- **Uncertainty:** 1,000 bootstrap resamples of Eval with models and thresholds frozen; 95% percentile CIs for AURC and risk at $C=75\%$, plus the **paired** difference $\text{AURC}(\cdot) - \text{AURC}(S_{\text{maj}})$.
+- **Safety-gate normalization:** the Step 3 gate compares strings exactly, so DROP format variants (`25 yards` vs `25`, `two` vs `2`, `697%` vs `697`) triggered deferral. Evaluation compares normalized answers (first number as float, else lowercased text without articles/punctuation). Over all 850 questions, triggers drop from DROP 139 / GSM8K 3 / SVAMP 17 to DROP 32 / GSM8K 3 / SVAMP 17. 33 of the 52 remaining triggers are curation errors (GSM8K 3/3, SVAMP 14/17, DROP 16/32).
+- **Table 1 corrections vs. project guide:** *Review Reduction* = coverage (the guide's 25% at $C=75\%$ was inverted). *Full Human Review* AURC reported as n/a (no acceptance, no curve). Added Eval coverage/risk at the Dev-calibrated $\tau_{0.05}$ and $\tau_{0.01}$. The "monotonically decreasing RC curves" expectation was dropped: empirical selective risk is not monotone in coverage.
+---
+ 
+### Table 1: Selective Performance on the Eval Split (Pooled Core Suite, $N=425$, Base Error 12.0%)
+Exported to `outputs/tables/table1_selective_performance.csv` (per-dataset rows included); curves in `outputs/figures/rc_curves_core.png`.
+ 
+| Triage Method | Max Coverage | Risk @ $C=75\%$ [95% CI] | AURC [95% CI] | $\Delta$AURC vs $S_{\text{maj}}$ [95% CI] | Eval $C$ / $R$ @ $\tau_{0.05}$ | Eval $C$ / $R$ @ $\tau_{0.01}$ | Review Reduction @ $C=75\%$ |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Full Human Review | 0.0% | n/a | n/a | n/a | n/a | n/a | 0.0% |
+| Unrestricted Majority | 100.0% | 12.0% at $C=100\%$ | n/a | n/a | n/a | n/a | 100.0% at $C=100\%$ |
+| Random Abstention | 100.0% | 12.0% [8.9, 15.1] | 0.120 [0.089, 0.150] | n/a | n/a | n/a | 75.0% |
+| $S_{\text{maj}}$ | 98.8% | 4.5% [2.3, 7.3] | 0.026 [0.016, 0.039] | 0 | 83.8% / 6.7% | 39.1% / 0.0% | 75.0% |
+| $S_{\text{ent}}$ | 98.8% | 4.9% [2.3, 7.4] | 0.025 [0.016, 0.037] | [−0.002, −0.000] | 82.4% / 6.3% | 39.1% / 0.0% | 75.0% |
+| $S_{\text{comb}}^{\text{baseline}}$ | 98.8% | 4.7% [2.2, 7.5] | 0.025 [0.015, 0.038] | [−0.004, +0.002] | 84.2% / 6.2% | 56.0% / 2.1% | 75.0% |
+| **$S_{\text{comb}}^{\text{calib}}$** | 98.8% | **4.1%** [1.9, 6.3] | **0.024** [0.014, 0.037] | [−0.008, +0.003] | 83.8% / **4.5%** | 46.4% / 1.5% | 75.0% |
+| $S_{\text{gate}}$ | 92.9% | 4.1% [1.9, 6.6] | 0.026 [0.014, 0.039] | [−0.007, +0.005] | 85.4% / 5.0% | 45.9% / 1.5% | 75.0% |
+| Oracle (lower bound) | 100.0% | 0.0% | 0.008 [0.004, 0.012] | n/a | n/a | n/a | 75.0% |
+ 
+**Dev-calibrated parameters** (`outputs/tables/step4_calibration.json`):
+- Logistic weights $[M, V, Sim, LS, Hed] = [1.98, 1.58, 0.51, 0.89, 1.35]$, intercept $-2.78$.
+- $\tau_{0.05}$: $S_{\text{maj}}$ 0.750, $S_{\text{ent}}$ 0.795, $S_{\text{comb}}^{\text{baseline}}$ 0.689, $S_{\text{comb}}^{\text{calib}}$ 0.851, $S_{\text{gate}}$ 0.807.
+- $\tau_{0.01}$: 1.000 / 1.000 / 0.859 / 0.945 / 0.945 (same order).
+#### Per-Benchmark AURC (Eval)
+| Benchmark ($N$, base error) | $S_{\text{maj}}$ | $S_{\text{ent}}$ | $S_{\text{comb}}^{\text{baseline}}$ | $S_{\text{comb}}^{\text{calib}}$ | $S_{\text{gate}}$ | Random | Oracle |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **GSM8K** (150, 12.0%) | **0.021** | 0.021 | 0.022 | 0.024 | 0.024 | 0.119 | 0.008 |
+| **SVAMP** (151, 9.9%) | 0.014 | 0.013 | **0.009*** | 0.011 | 0.010 | 0.099 | 0.005 |
+| **DROP** (124, 14.5%) | 0.033 | 0.026* | 0.025* | **0.017*** | 0.025 | 0.144 | 0.011 |
+ 
+\* Paired bootstrap CI of $\Delta$AURC vs $S_{\text{maj}}$ excludes 0. DROP $S_{\text{comb}}^{\text{calib}}$: $[-0.034, -0.002]$.
+ 
+---
+ 
+### Key Takeaways
+1. **All consensus scores rank curation errors far better than chance.** Pooled AURC is 0.024–0.026 versus 0.120 for random abstention (≈ 80% reduction), with the Oracle bound at 0.008. At $C = 75\%$, selective risk falls from 12.0% to 4.1–4.9%.
+2. **No detectable pooled gain of the multi-signal composite over plain majority.** Every pooled $\Delta$AURC CI contains 0, and $S_{\text{ent}}$ is borderline ($[-0.002, -0.000]$). With 51 Eval errors the experiment cannot separate methods whose AURCs differ by < 0.003, so the pooled ranking must not be over-interpreted.
+3. **The gain is benchmark-specific and appears on free-text DROP.** $S_{\text{comb}}^{\text{calib}}$ halves AURC relative to $S_{\text{maj}}$ (0.017 vs 0.033; CI excludes 0), and risk at $C = 75\%$ drops from 4.9% to 1.1%. On math (GSM8K), majority alone is as good as any composite. This is consistent with Step 2: $Sim$ and $Hed$ separate `rejected` items mainly when answers are textual or models verbalize hesitation.
+4. **Only $S_{\text{comb}}^{\text{calib}}$ honours the 5% risk target out-of-sample.** Pooled Eval risk at the Dev-chosen $\tau_{0.05}$ is 4.5% at 83.8% coverage. $S_{\text{maj}}$ (6.7%), $S_{\text{ent}}$ (6.3%) and $S_{\text{comb}}^{\text{baseline}}$ (6.2%) overshoot, and $S_{\text{gate}}$ sits at the boundary (5.0%). The cross-fitted threshold selection is therefore doing useful work.
+5. **Pooled thresholds do not transfer uniformly across benchmarks.** The same pooled $\tau_{0.05}$ yields Eval risk of 10.0% on GSM8K but 0.8% on SVAMP and 1.2% on DROP for $S_{\text{comb}}^{\text{calib}}$. GSM8K `rejected` items keep high majority ratios (mean $M = 0.82$), so they pass a pooled threshold. Per-benchmark calibration or a benchmark-aware feature is required before claiming a guarantee per dataset. This is relevant to the Step 7 transfer test.
+6. **The $\tau_{0.01}$ regime is dominated by the verification-bias artifact.** $S_{\text{maj}}$ at $\tau_{0.01} = 1.0$ accepts exactly the unanimous questions (39.1%) with 0.0% observed risk, because unanimous items were never eligible for rejection. The composites reach 46–56% coverage but exceed 1% risk (1.5–2.1%). No method demonstrably meets $R \le 1\%$ with non-trivial coverage.
+7. **The safety gate adds deferrals without improving ranking.** After normalization, $S_{\text{gate}}$ caps coverage at 92.9% and leaves AURC unchanged (0.026 vs 0.024 for its base score $S_{\text{comb}}^{\text{calib}}$). On math, its triggers are mostly real errors (GSM8K 3/3, SVAMP 14/17), but these already receive low scores. On DROP, half of the 32 triggers are `revised` questions where the majority is correct and the legacy label was wrong. The gate's value is procedural (no legacy label overturned without sign-off), not a gain in risk.
+### Empirical Cases
+- **Confident wrong consensus (GSM8K #288):** 21/24 models ($M = 0.875$) and the legacy label agree on `3`; the platinum target is `4`. Blind scores and the gate both pass it. This is the concrete instance of the limitation under study and is invisible to any consensus-only auditor.
+- **Low-consensus majority errors are already caught:** SVAMP #261 ($M = 0.50$) and DROP #143 ($M = 0.29$) fall in the `low` margin bin and are deferred at every calibrated threshold.
+- **Legacy-label format brittleness (DROP):** 107/107 exact-string gate triggers in the non-rejected DROP set had a correct majority (e.g. `11 days` vs legacy `12`, a genuine legacy error; `697%` vs `697`, a pure format mismatch). This motivated the normalized gate.
+- **Logistic weights align with Step 2 diagnostics:** $Hed$ receives the third-largest weight (1.35) despite exclusion from $S_{\text{comb}}^{\text{baseline}}$, consistent with its collapse on SVAMP `rejected` items (0.916 → 0.319). $Sim$ receives the smallest weight (0.51).
+### Open Items Before Closing Step 4
+- Group approval of the `curation` error definition (fallback: `--error-def label`, which reproduces the degenerate result above).
+- Confirm that the label-free $Sim$/$LS$ scaling bounds, fitted on the pooled $N=850$ suite including Eval questions, are acceptable. They use no labels, so no target leakage, but the bounds are not strictly Dev-only.
+- Decide whether per-benchmark thresholds become a Step 5/7 variant (Takeaway 5).
 ---
 
 ## Step 5: Layer 2 Evaluation (Paper Queue Triage & Failure Modes)
