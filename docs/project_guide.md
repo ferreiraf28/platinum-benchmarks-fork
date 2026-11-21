@@ -279,13 +279,13 @@ Generate and format **Table 1** for core benchmarks (`gsm8k`, `svamp`, `drop`):
 ```
 
 #### 4.4 Step-by-Step Action Items
-- [ ] 1. Create `src/evaluation.py`.
-- [ ] 2. Implement stratified 50/50 split generator (`seed=42`).
-- [ ] 3. Implement calibration routine on Dev Split to optimize weights and derive $\tau_{\text{target}}$.
-- [ ] 4. Implement blind evaluator on Eval Split using `src/utils.py::check_prediction`.
-- [ ] 5. Implement numerical trapezoidal integration for AURC.
-- [ ] 6. Generate and save RC Curve plots comparing all baselines to `outputs/figures/rc_curves_core.png`.
-- [ ] 7. Export Table 1 to `outputs/tables/table1_selective_performance.csv`.
+- [x] 1. Create `src/evaluation.py`.
+- [x] 2. Implement stratified 50/50 split generator (`seed=42`).
+- [x] 3. Implement calibration routine on Dev Split to optimize weights and derive $\tau_{\text{target}}$.
+- [x] 4. Implement blind evaluator on Eval Split using `src/utils.py::check_prediction`.
+- [x] 5. Implement numerical trapezoidal integration for AURC.
+- [x] 6. Generate and save RC Curve plots comparing all baselines to `outputs/figures/rc_curves_core.png`.
+- [x] 7. Export Table 1 to `outputs/tables/table1_selective_performance.csv`.
 
 #### 4.5 Verification Tests
 ```bash
@@ -301,13 +301,13 @@ python3 src/evaluation.py --datasets gsm8k svamp drop --split_seed 42
 ---
 
 ### Step 5: Layer 2 Evaluation: Paper Review Queue Triage & Error Taxonomy
-
+ 
 #### 5.1 Objective & Scientific Rationale
 In Vendrow et al. (2025), a question is sent to human review whenever at least one model diverges from the target:
 $$\text{paper\_flagged}(x) = \text{True} \iff \exists m \in \mathcal{M} : \hat{y}_m(x) \neq y_{\text{target}}^*(x)$$
 In Layer 2, we evaluate: *How much of this flagged queue can our selective auditor safely accept without manual review, under a controlled risk ceiling ($R \le 0.05$)?*
 We also test **Hypothesis H3** via margin stratification ($[23-1], [22-2], [21-3], \dots$) and diagnose failure modes according to the 4 Operational Error Regimes.
-
+ 
 #### 5.2 Deliverables: Table 2 & Table 3
 - **Table 2 (Paper Queue Reduction across Vote Margins):**
 ```text
@@ -329,23 +329,21 @@ We also test **Hypothesis H3** via margin stratification ($[23-1], [22-2], [21-3
   2. *Regime 4.2 (Mislabelled Legacy Label):* Models converged on correct solution, correcting original dataset error!
   3. *Regime 4.3 (Correlated Error):* False consensus on incorrect answer; blind auditor blind spot.
   4. *Regime 4.4 (Shared Ambiguity / First-Event Bias):* Consensus driven by prompt heuristics; studied in Arm 2.
-
 #### 5.3 Step-by-Step Action Items
-- [ ] 1. Create `src/queue_analysis.py`.
-- [ ] 2. Filter dataset to subset where `paper_flagged == True`.
-- [ ] 3. Apply calibrated auditor ($S_{\text{comb}}^{\text{calib}} \ge \tau_{0.05}$) to this subset.
-- [ ] 4. Stratify results into vote margin buckets: $[23-1], [22-2], [21-3], \le 20$.
-- [ ] 5. Compute review queue reduction percentage:
+- [x] 1. Create `src/queue_analysis.py`.
+- [x] 2. Filter dataset to subset where `paper_flagged == True`.
+- [x] 3. Apply calibrated auditor ($S_{\text{comb}}^{\text{calib}} \ge \tau_{0.05}$) to this subset.
+- [x] 4. Stratify results into vote margin buckets: $[23-1], [22-2], [21-3], \le 20$.
+- [x] 5. Compute review queue reduction percentage:
   $$\text{Queue\_Reduction} = \frac{|\text{Accepted by Auditor}|}{|\mathcal{Q}_{\text{paper}}|}$$
-- [ ] 6. Sample 4 illustrative cases for Table 3, documenting prompt, votes, target, and root cause.
-- [ ] 7. Export Table 2 to `outputs/tables/table2_queue_reduction.csv` and Table 3 to `outputs/tables/table3_error_taxonomy.md`.
-
+- [x] 6. Sample 4 illustrative cases for Table 3, documenting prompt, votes, target, and root cause.
+- [x] 7. Export Table 2 to `outputs/tables/table2_queue_reduction.csv` and Table 3 to `outputs/tables/table3_error_taxonomy.md`.
 #### 5.4 Verification Tests
 ```bash
 python3 src/queue_analysis.py --datasets gsm8k svamp drop
 ```
 *Expected Output:* Clear margin breakdown; confirmation of whether $[23-1]$ margin has risk $\le 5\%$.
-
+ 
 #### 5.5 Definition of Done (DoD)
 - Table 2 and Table 3 generated and verified.
 - Empirical test of Hypothesis H3 concluded.

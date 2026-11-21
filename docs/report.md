@@ -239,15 +239,90 @@ Exported to `outputs/tables/table1_selective_performance.csv` (per-dataset rows 
 - **Low-consensus majority errors are already caught:** SVAMP #261 ($M = 0.50$) and DROP #143 ($M = 0.29$) fall in the `low` margin bin and are deferred at every calibrated threshold.
 - **Legacy-label format brittleness (DROP):** 107/107 exact-string gate triggers in the non-rejected DROP set had a correct majority (e.g. `11 days` vs legacy `12`, a genuine legacy error; `697%` vs `697`, a pure format mismatch). This motivated the normalized gate.
 - **Logistic weights align with Step 2 diagnostics:** $Hed$ receives the third-largest weight (1.35) despite exclusion from $S_{\text{comb}}^{\text{baseline}}$, consistent with its collapse on SVAMP `rejected` items (0.916 → 0.319). $Sim$ receives the smallest weight (0.51).
-### Open Items Before Closing Step 4
-- Group approval of the `curation` error definition (fallback: `--error-def label`, which reproduces the degenerate result above).
-- Confirm that the label-free $Sim$/$LS$ scaling bounds, fitted on the pooled $N=850$ suite including Eval questions, are acceptable. They use no labels, so no target leakage, but the bounds are not strictly Dev-only.
-- Decide whether per-benchmark thresholds become a Step 5/7 variant (Takeaway 5).
+### Resolved and Remaining Items
+- **Resolved:** the `curation` error definition was approved by the group.
+- **Resolved:** per-benchmark thresholds were evaluated as a sensitivity analysis in Step 5 (queue-level, Dev-only).
+- **Remaining (limitation):** the label-free $Sim$/$LS$ scaling bounds were fitted on the pooled $N=850$ suite, which includes Eval questions. They use no labels, so there is no target leakage, but the bounds are not strictly Dev-only.
 ---
 
 ## Step 5: Layer 2 Evaluation (Paper Queue Triage & Failure Modes)
-- *(Review queue reduction rates at R <= 0.05 and failure diagnoses to be recorded upon completion)*
-
+ 
+> **Status: completed.** Implemented in [src/queue_analysis.py](/src/queue_analysis.py), validated by 13/13 unit tests in [tests/test_queue_analysis.py](/tests/test_queue_analysis.py) (78/78 repository-wide). Run: `python3 src/queue_analysis.py --datasets gsm8k svamp drop`.
+ 
+### Paper Queue Reconstruction (Decision)
+- **Definition used:** $\text{paper\_flagged}(x) \iff \text{cleaning\_status}(x) \neq \texttt{consensus}$. The released status records exactly which questions a human reviewed: `consensus` = never reviewed; `verified` / `revised` / `rejected` = reviewed. This is the queue the paper actually processed, not a proxy.
+- **Why not the guide's formula** $\exists m: \hat{y}_m \neq y^*_{\text{platinum}}$: after revision, the platinum target was expanded to accept the models' answers (e.g. `25 yards`). The formula therefore drops **130 reviewed `revised` DROP questions** (89 instead of 219). On GSM8K and SVAMP both definitions coincide (66 and 59). The proposal itself states the paper's rule against $y_{\text{original}}$, which is what `cleaning_status` encodes.
+- **Queue size:** 344 / 850 questions (40.5%): GSM8K 66, SVAMP 59, DROP 219. Composition: 180 `revised`, 94 `rejected`, 70 `verified`.
+### Protocol
+- **Frozen Step 4 auditor:** the logistic model is refit on Dev with the identical deterministic procedure (weights asserted equal to `step4_calibration.json`); $\tau_{0.05}$ is read from Step 4's file, not re-selected. No parameter sees Eval.
+- **Population:** the **166 Eval questions** of the paper queue (GSM8K 32, SVAMP 25, DROP 109), using the exact Step 4 split (verified question by question).
+- **Error:** the Step 4 `curation` definition. All 51 Eval curation errors lie inside the queue (base error rate in the queue: 30.7%); questions outside it have no observable errors (verification bias, see Step 4).
+- **Methods:** $S_{\text{maj}}$ (baseline), $S_{\text{comb}}^{\text{calib}}$ (proposed, blind) and $S_{\text{gate}}$ (legacy curation, the setting closest to the paper, which also had legacy labels).
+- **Margin buckets** ($K=24$, number of models not giving $\hat{y}_{\text{maj}}$): `24-0`, `23-1`, `22-2`, `21-3`, `<=20`. The `24-0` bucket was added to the guide's list: 20 DROP questions (10 in Eval) are unanimous among models yet in the queue, because the shared answer contradicts a wrong legacy label.
+- **Uncertainty:** Wilson 95% intervals for the risk among accepted questions (buckets hold 10–99 questions).
+- **Metrics per group:** accepted, deferred, false accepts (accepted curation errors), $R = \text{false accepts}/\text{accepted}$, and $\text{Queue\_Reduction} = \text{accepted}/|\mathcal{Q}_{\text{paper}}|$.
+---
+ 
+### Table 2: Paper Queue Reduction (Eval, Step 4 $\tau_{0.05}$)
+Exported to `outputs/tables/table2_queue_reduction.csv` (all methods, thresholds and breakdowns); per-question decisions in `outputs/tables/step5_scored_eval_queue.csv`.
+ 
+#### By vote margin ($S_{\text{comb}}^{\text{calib}}$, $\tau = 0.851$)
+| Margin | Queue $N$ | Accepted | Deferred | False accepts | Risk among accepted [95% CI] | Queue reduction |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| 24-0 | 10 | 10 | 0 | 0 | 0.0% [0.0, 27.8] | 100.0% |
+| 23-1 | 21 | 16 | 5 | 3 | 18.8% [6.6, 43.0] | 76.2% |
+| 22-2 | 18 | 14 | 4 | 3 | 21.4% [7.6, 47.6] | 77.8% |
+| 21-3 | 18 | 16 | 2 | 2 | 12.5% [3.5, 36.0] | 88.9% |
+| <=20 | 99 | 44 | 55 | 8 | 18.2% [9.5, 32.0] | 44.4% |
+| **Total** | **166** | **100** | **66** | **16** | **16.0% [10.1, 24.4]** | **60.2%** |
+ 
+#### By method and benchmark (Step 4 $\tau_{0.05}$)
+| Method | GSM8K: reduction / risk | SVAMP: reduction / risk | DROP: reduction / risk | Total: reduction / risk [95% CI] |
+| :--- | :---: | :---: | :---: | :---: |
+| $S_{\text{maj}}$ ($\tau=0.750$) | 81.2% / 61.5% | 52.0% / 38.5% | 53.2% / 5.2% | 58.4% / 24.7% [17.2, 34.2] |
+| $S_{\text{comb}}^{\text{calib}}$ ($\tau=0.851$) | 71.9% / 60.9% | 32.0% / 12.5% | 63.3% / **1.4%** | 60.2% / **16.0%** [10.1, 24.4] |
+| $S_{\text{gate}}$ ($\tau=0.807$) | 78.1% / 56.0% | 40.0% / 30.0% | 65.1% / **1.4%** | 63.9% / 17.0% [11.0, 25.3] |
+ 
+#### Sensitivity: thresholds selected for the queue itself (Dev queue only, out-of-fold scores)
+| Threshold source | Method | Queue reduction | Risk among accepted [95% CI] |
+| :--- | :--- | :---: | :---: |
+| Pooled queue $\tau_{0.05}$ | $S_{\text{maj}}$ ($\tau=1.000$) | 6.0% | 0.0% [0.0, 27.8] |
+| Pooled queue $\tau_{0.05}$ | $S_{\text{comb}}^{\text{calib}}$ ($\tau=0.948$) | 6.6% | 18.2% [5.1, 47.7] |
+| Per-benchmark queue $\tau_{0.05}$ | $S_{\text{comb}}^{\text{calib}}$ | 25.3% | 7.1% [2.5, 19.0] |
+| Per-benchmark queue $\tau_{0.05}$ | $S_{\text{gate}}$ | 31.9% | 5.7% [1.9, 15.4] |
+| Per-benchmark, **DROP only** | $S_{\text{comb}}^{\text{calib}}$ ($\tau=0.912$) | **33.9%** (37/109) | **0.0%** [0.0, 9.4] |
+| Per-benchmark, **DROP only** | $S_{\text{gate}}$ ($\tau=0.886$) | **44.0%** (48/109) | **0.0%** [0.0, 7.4] |
+ 
+Per-benchmark Dev queues are small (GSM8K 34, SVAMP 34, DROP 110), so these thresholds are noisy and reported as a sensitivity analysis only.
+ 
+---
+ 
+### Table 3: Qualitative Error Taxonomy
+Exported to `outputs/tables/table3_error_taxonomy.md` (with full question texts). One curated example per operational regime of the proposal (Section 6.3):
+ 
+| Regime | Example | Votes | Legacy → Platinum | Status | $S_{\text{comb}}^{\text{calib}}$ | Blind / Gated | Root cause |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
+| 4.1 Isolated model error | GSM8K #5 (Eval) | 64 ×23, 56 ×1 | 64 → 64 | `verified` | 0.939 | ACCEPT / ACCEPT | One model mis-applies a discount. The paper's rule sent it to review; the auditor accepts it correctly. |
+| 4.2 Mislabelled legacy label | DROP #148 (Eval) | `rob bironas` ×24 | `bironas` → `bironas`, `rob bironas` | `revised` | 0.962 | ACCEPT / DEFER | All models expose a brittle label. Blind acceptance is correct; the gate defers by design. |
+| 4.3 Correlated model error | GSM8K #288 (Dev) | 3 ×21, 4 ×2 | 3 → 4 | `revised` | 0.908 | ACCEPT / ACCEPT | Models and legacy label divide total weight and ignore that whole flagstones must fit per truck. Shared shortcut. |
+| 4.4 Shared ambiguity | GSM8K #146 (Eval) | 2125 ×23, 2625 ×1 | 2125 → 2125 | `rejected` | 0.950 | ACCEPT / ACCEPT | "3 times more pieces than 500" has two readings; consensus picks one. Rejected by the paper as ambiguous. |
+ 
+Table 3 is illustrative: the 4.3 example comes from Dev because only 3 majority errors exist in the whole core suite. It feeds no metric.
+ 
+---
+ 
+### Key Takeaways
+1. **Hypothesis H3 is not supported by vote margin alone.** In the `23-1` bucket (a single dissenting model), the risk of accepting is 26.3% for $S_{\text{maj}}$ and 18.8% for $S_{\text{comb}}^{\text{calib}}$, far above 5%. A near-unanimous vote does not certify a question: several `rejected` questions draw 23/24 agreement.
+2. **The auditor removes 60% of the paper's queue, but the risk inside the queue is 16%, not 5%.** Step 4's $\tau_{0.05}$ controls risk over the whole benchmark, where unreviewed `consensus` questions carry no observable errors. The queue concentrates every error (30.7% base rate), so the same threshold overshoots there. Both numbers must be reported together.
+3. **The composite score reduces queue risk relative to majority vote** (16.0% vs 24.7% at similar queue reduction, 60.2% vs 58.4%), confirming on the queue the Step 4 finding that combining signals helps. The CIs overlap ([10.1, 24.4] vs [17.2, 34.2]), so the difference is suggestive, not conclusive.
+4. **Safe triage is benchmark-specific.** On DROP, $S_{\text{comb}}^{\text{calib}}$ removes 63.3% of the queue at 1.4% risk (1 of 69), and a DROP-specific Dev threshold removes 33.9% (gated: 44.0%) with **zero** errors in Eval. There, most queued questions are label errors the models correct (Regime 4.2).
+5. **On GSM8K, consensus cannot separate defective questions from sound ones.** All 14 false accepts of $S_{\text{comb}}^{\text{calib}}$ on GSM8K are `rejected` questions with high agreement (mean $M = 0.87$), agreement with the legacy label and no hedging (Regime 4.4). No threshold isolates them: a GSM8K-specific Dev threshold accepts only 2 of 32 queued questions, and both are errors.
+6. **The paper's rule over-reviews in a precisely identifiable place.** All 10 Eval `24-0` questions (DROP) are correct when $\hat{y}_{\text{maj}}$ is accepted: the paper reviewed them only because the legacy label was wrong. The gate keeps 2 of them for human sign-off by design.
+7. **Where the auditor fails is the consensus blind spot, now with concrete instances.** Regimes 4.3 (GSM8K #288) and 4.4 (GSM8K #146) are accepted with high confidence by every consensus-based score. These failures are shared with the paper's own heuristic, which the authors acknowledge yields only a lower bound on errors.
+### Limitations Identified in Step 5
+- **Vote counting does not merge equivalent surface forms** (`003` vs `3` in GSM8K #288; `three` vs `3` in DROP #143), which slightly lowers $M$ and $V$ for a few questions. Normalizing predictions before voting is a candidate fix for Step 7.
+- **Small groups:** margin buckets of 10–21 Eval questions yield wide intervals (e.g. `23-1`: [6.6%, 43.0%]); conclusions rely on totals and per-benchmark patterns.
+- **The paper-queue definition relies on the released `cleaning_status`.** It reproduces the paper's review set exactly, but it is a label column and is used only in the evaluation layer.
 ---
 
 ## Step 6: Arm 2 (DROP Stress Test & Temporal Robustness)
