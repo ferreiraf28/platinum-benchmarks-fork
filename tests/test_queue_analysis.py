@@ -184,7 +184,7 @@ class TestTable3(unittest.TestCase):
                            table_path=os.path.join(tmp, "t.csv"), figure_path=os.path.join(tmp, "f.png"),
                            split_path=os.path.join(tmp, "s.csv"), calib_path=calib)
             frame = build_queue_frame(src, ["gsm8k", "svamp", "drop"])
-            md = table3(frame[frame["idx"] > 10**6], calib, ["gsm8k"], os.path.join(tmp, "none.json"))
+            md = table3(frame[frame["idx"] > 10**6], calib, [], os.path.join(tmp, "none.json"))
         self.assertIn("| Regime |", md)
         self.assertEqual(md.count("\n| 4."), 0)
 

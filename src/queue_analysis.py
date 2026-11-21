@@ -323,12 +323,10 @@ def table3(
     illustration only (an example may come from the Dev split, which is flagged), so Table 3
     never feeds any metric.
     """
-    dev = frame[frame["split"] == "dev"].reset_index(drop=True)
-    model, _, _ = calibrate_on_dev(dev, dev["error"].to_numpy(), seed=seed)
+    examples = [ex for ex in TABLE3_EXAMPLES
+                if ((frame["dataset"] == ex["dataset"]) & (frame["idx"].astype(str) == ex["idx"])).any()]
     taus = load_frozen_thresholds(calib_path)
-    texts = _load_questions(datasets, questions_path)
-
-    lines = [
+    header = [
         "# Table 3: Qualitative Error Taxonomy (Paper Review Queue)",
         "",
         "One curated example per operational error regime. Scores use the frozen Step 4 auditor "
@@ -337,7 +335,15 @@ def table3(
         "| Regime | Question | Votes (top 3) | Legacy label | Platinum target | Status | S_comb_calib | Blind decision | Gated decision | Root cause |",
         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
-    for ex in TABLE3_EXAMPLES:
+    if not examples:
+        return "\n".join(header) + "\n"
+
+    dev = frame[frame["split"] == "dev"].reset_index(drop=True)
+    model, _, _ = calibrate_on_dev(dev, dev["error"].to_numpy(), seed=seed)
+    texts = _load_questions(datasets, questions_path)
+
+    lines = list(header)
+    for ex in examples:
         row = frame[(frame["dataset"] == ex["dataset"]) & (frame["idx"].astype(str) == ex["idx"])]
         if row.empty:
             continue
