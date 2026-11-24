@@ -346,10 +346,10 @@ Direct out-of-distribution ablation across all five scoring formulations using t
 
 | Triage Method | Max Coverage | Risk @ $C=75\%$ | AURC | Held-Out $C$ / $R$ @ $\tau_{0.05}$ | Meets $R \le 5\%$ Target? | Held-Out $C$ / $R$ @ $\tau_{0.01}$ |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| Unrestricted Majority | 100.0% | 10.5% at $C=100\%$ | n/a | n/a | ❌ No (10.5%) | n/a |
-| Random Abstention | 100.0% | 10.5% | 0.1053 | n/a | ❌ No (10.5%) | n/a |
-| $S_{\text{maj}}$ (Majority Ratio) | 99.9% | 2.46% | 0.0206 | 90.9% / **5.32%** | ❌ **No (Overshoots)** | 54.0% / 0.84% |
-| $S_{\text{ent}}$ (Shannon Entropy) | 99.9% | 2.38% | 0.0206 | 90.2% / **5.31%** | ❌ **No (Overshoots)** | 54.0% / 0.84% |
+| Unrestricted Majority | 100.0% | 10.5% at $C=100\%$ | n/a | n/a | No (10.5%) | n/a |
+| Random Abstention | 100.0% | 10.5% | 0.1053 | n/a | No (10.5%) | n/a |
+| $S_{\text{maj}}$ (Majority Ratio) | 99.9% | 2.46% | 0.0206 | 90.9% / **5.32%** | **No (Overshoots)** | 54.0% / 0.84% |
+| $S_{\text{ent}}$ (Shannon Entropy) | 99.9% | 2.38% | 0.0206 | 90.2% / **5.31%** | **No (Overshoots)** | 54.0% / 0.84% |
 | $S_{\text{comb}}^{\text{baseline}}$ (Linear Heuristic) | 99.9% | 2.29% | 0.0172 | 90.0% / **4.87%** |  **Yes** | 55.9% / 0.97% |
 | **$S_{\text{comb}}^{\text{calib}}$ (Logistic Calibrated)** | 99.9% | **2.29%** | **0.0193** | 89.2% / **4.86%** |  **Yes** | 49.0% / 1.39% |
 | $S_{\text{gate}}$ (With Safety Gate) | 92.5% | **1.81%** | **0.0168** | 83.9% / **3.50%** |  **Yes (Most Conservative)** | 47.3% / 0.57% |

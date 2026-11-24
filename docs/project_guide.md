@@ -369,8 +369,8 @@ submission_group_XX/
 ```
 
 #### 6.3 Step-by-Step Action Items
-- [ ] 1. Run full evaluation across all 14 textual datasets.
-- [ ] 2. Compile aggregated cross-benchmark tables and figures evaluating zero-shot transfer of thresholds and weights.
+- [x] 1. Run full evaluation across all 14 textual datasets.
+- [x] 2. Compile aggregated cross-benchmark tables and figures evaluating zero-shot transfer of thresholds and weights.
 - [ ] 3. Construct `notebook.ipynb` with clear narrative headings, explanations of equations, execution blocks, and rendered charts.
 - [ ] 4. Perform fresh-environment verification ("Run All Cells" in a clean virtual environment).
 - [ ] 5. Verify that no cells require API keys or active internet connection.
@@ -435,4 +435,15 @@ jupyter nbconvert --to notebook --execute notebook.ipynb --output notebook_execu
   - At operational midpoint $\tau = 0.80$, our auditor strictly outperforms the base paper's 24/24 heuristic across all benchmarks: GSM8K ($91.0\%$ vs $81.0\%$), SVAMP ($93.0\%$ vs $87.0\%$), and DROP ($29.0\%$ blind / $17.0\%$ gated vs $13.0\%$), achieving $71.0\%$ pooled blind coverage ($67.0\%$ gated) vs. $60.3\%$ for the paper baseline.
   - Results exported to `outputs/tables/auditor_step3_summary.csv` and documented in `docs/report.md`.
 - **Next Immediate Action:** Begin Step 4: Stratified 50/50 Dev/Eval split protocol, supervised logistic calibration, out-of-sample risk-coverage evaluation, and Table 1 generation in `src/evaluation.py`.
+
+### Entry 005 — Step 4 & Step 5 Completed: Calibration & Layer 2 Queue Reduction (2026-11-09)
+- **Action:** Implemented `src/evaluation.py` (Step 4) and `src/queue_analysis.py` (Step 5). Calibrated weights and operational thresholds ($\tau_{0.05} = 0.851$, $\tau_{0.01} = 0.945$) strictly on Core Dev ($N=425$). Evaluated out-of-sample RC curves and paper review queue triage.
+- **Verification:** Unit tests in `tests/test_evaluation.py` (25/25) and `tests/test_queue_analysis.py` (13/13). Generated Table 1, Table 2, Table 3, and `outputs/figures/rc_curves_core.png`.
+- **Key Finding:** Proved multi-signal superiority over pure vote counts. Confirmed consensus blind spot (Regimes 4.3 and 4.4) on ambiguous questions.
+
+### Entry 006 — Step 6 Experimental Phase Completed: Cross-Benchmark Generalization (2026-11-24)
+- **Action:** Scaled evaluation across all 11 held-out benchmarks ($N=2,212$) and pooled across all 14 benchmarks ($N=3,062$). Implemented zero-shot evaluation pipeline in `src/cross_benchmark.py`.
+- **Verification:** 4/4 unit tests in `tests/test_cross_benchmark.py` (82/82 passing repository-wide). Generated `table4_cross_benchmark_generalization.csv`, `table5_cross_benchmark_queue.csv`, and `outputs/figures/rc_curves_cross_benchmark.png`.
+- **Key Finding:** Zero-shot transfer confirmed without overfitting: held-out risk remains strictly controlled at $4.86\%$ at $89.2\%$ coverage. Identified cognitive domain asymmetry: Math/Logic operate at $1\text{--}3\%$ risk, while Reading/QA incurs $12.57\%$ risk due to consensus blind spots on defective original questions.
+- **Next Immediate Action:** Construct `notebook.ipynb` and prepare final submission materials.
 
