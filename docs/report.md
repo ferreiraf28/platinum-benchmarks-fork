@@ -95,7 +95,7 @@ Audited via [scripts/verify_step2_signals.py](/scripts/verify_step2_signals.py) 
    - On SVAMP `rejected` items, $Hed(x)$ crashes from $0.916$ to **$0.319$**. Models explicitly output verbal hesitation (*"assuming no contradiction"*, *"cannot determine"*) without requiring ground-truth access.
 5. **Calibrated Scaling Strategy ($0.15 \to 0.60$):**
    - Accounts for the cross-architecture ceiling ($\sim 0.60$) and residual prompt-entity overlap floor ($\sim 0.15$).
-   - Prevents artificial downward drag on linear baseline combinations ($S_{\text{comb}}^{\text{baseline}}$), while universal dev-suite calibration ($N=850$) protects the 12 held-out test benchmarks for leak-free zero-shot evaluation in Step 7.
+   - Prevents artificial downward drag on linear baseline combinations ($S_{\text{comb}}^{\text{baseline}}$), while universal dev-suite calibration ($N=850$) protects the 12 held-out test benchmarks for leak-free zero-shot evaluation in Step 6.
 
 ---
 
@@ -154,7 +154,7 @@ The optimal scoring formulation (baseline vs. calibrated) and the definitive ope
 - **Calibrate weights and pick the optimal threshold (Step 4 - Dev Split):** Fit logistic regression on the Dev split to learn data-driven signal weights, select the best scoring method (heuristic baseline vs. calibrated logistic regression), and determine the optimal confidence threshold to guarantee an error rate under 5% ($\tau_{0.05}$).
 - **Evaluate on unseen data (Step 4 - Eval Split):** Benchmark all scoring methods out-of-sample on the untouched Eval split using Coverage, Selective Risk, and Risk-Coverage curves (AURC) to produce Table 1.
 - **Measure human review savings and diagnose failures (Step 5):** Quantify how much manual review effort is saved compared to the paper's original triage heuristic, and analyze why the ensemble fails when it does (e.g., benchmark prompt ambiguity vs. shared model mistakes).
-- **Test generalization across benchmarks (Step 7):** Verify whether the learned weights and optimal threshold transfer effectively to new, unseen benchmarks without retraining.
+- **Test generalization across benchmarks (Step 6):** Verify whether the learned weights and optimal threshold transfer effectively to new, unseen benchmarks without retraining.
 
 ---
 
@@ -185,7 +185,7 @@ Two-stage pipeline, validated by 25/25 unit tests in [tests/test_evaluation.py](
   An auto-accepted question is a curation failure if it required a human, either because its consensus label is wrong or because the question itself is defective. This mirrors the two outcomes of the paper's manual review (`revised` label vs. `rejected` question).
 - **Error composition:** 97 errors / 850 (11.4%) = 94 `rejected` + 3 majority errors. Dev 46 (GSM8K 9, SVAMP 13, DROP 24) / Eval 51 (GSM8K 18, SVAMP 15, DROP 18).
 - **Note on `rejected` targets:** `rejected` rows still carry a `platinum_target` in the HF release (majority matches it on 46/94), but it was never validated; under `curation` it is ignored.
-- **Verification-bias caveat:** the paper only inspected questions where at least one model diverged. Unanimous questions were labelled `consensus` without review, so they cannot be `rejected` by construction. Empirically **0 / 332** unanimous questions are errors, versus 43/385 `high` and 54/133 `low`. Errors hidden behind unanimous consensus (Regime 4.3/4.4) are unobservable under both definitions; this motivates Arm 2.
+- **Verification-bias caveat:** the paper only inspected questions where at least one model diverged. Unanimous questions were labelled `consensus` without review, so they cannot be `rejected` by construction. Empirically **0 / 332** unanimous questions are errors, versus 43/385 `high` and 54/133 `low`. Errors hidden behind unanimous consensus (Regime 4.3/4.4) are unobservable under both definitions and represent an inherent limitation of consensus-based curation.
 ### Metric Implementation Decisions
 - **Tie handling:** score ties are frequent (166 unanimous Eval questions share $S_{\text{maj}} = S_{\text{ent}} = 1$). Within a tied block of $n_g$ questions with $e_g$ errors, accepting $j$ of them contributes $j \cdot e_g / n_g$ expected errors. This is the exact expectation under uniform random tie-breaking, i.e. the limit of averaging infinitely many seeded tie-breaks, with no sampling noise.
 - **Curve and AURC:** $R(k/N)$ for $k = 1..N$; $\text{AURC} = \int R\,dC$ by the trapezoidal rule. *Random Abstention* = constant score (one tie block: flat risk at the base rate). *Oracle* = errors ranked last (lower bound for the given error rate).
@@ -231,7 +231,7 @@ Exported to `outputs/tables/table1_selective_performance.csv` (per-dataset rows 
 2. **No detectable pooled gain of the multi-signal composite over plain majority.** Every pooled $\Delta$AURC CI contains 0, and $S_{\text{ent}}$ is borderline ($[-0.002, -0.000]$). With 51 Eval errors the experiment cannot separate methods whose AURCs differ by < 0.003, so the pooled ranking must not be over-interpreted.
 3. **The gain is benchmark-specific and appears on free-text DROP.** $S_{\text{comb}}^{\text{calib}}$ halves AURC relative to $S_{\text{maj}}$ (0.017 vs 0.033; CI excludes 0), and risk at $C = 75\%$ drops from 4.9% to 1.1%. On math (GSM8K), majority alone is as good as any composite. This is consistent with Step 2: $Sim$ and $Hed$ separate `rejected` items mainly when answers are textual or models verbalize hesitation.
 4. **Only $S_{\text{comb}}^{\text{calib}}$ honours the 5% risk target out-of-sample.** Pooled Eval risk at the Dev-chosen $\tau_{0.05}$ is 4.5% at 83.8% coverage. $S_{\text{maj}}$ (6.7%), $S_{\text{ent}}$ (6.3%) and $S_{\text{comb}}^{\text{baseline}}$ (6.2%) overshoot, and $S_{\text{gate}}$ sits at the boundary (5.0%). The cross-fitted threshold selection is therefore doing useful work.
-5. **Pooled thresholds do not transfer uniformly across benchmarks.** The same pooled $\tau_{0.05}$ yields Eval risk of 10.0% on GSM8K but 0.8% on SVAMP and 1.2% on DROP for $S_{\text{comb}}^{\text{calib}}$. GSM8K `rejected` items keep high majority ratios (mean $M = 0.82$), so they pass a pooled threshold. Per-benchmark calibration or a benchmark-aware feature is required before claiming a guarantee per dataset. This is relevant to the Step 7 transfer test.
+5. **Pooled thresholds do not transfer uniformly across benchmarks.** The same pooled $\tau_{0.05}$ yields Eval risk of 10.0% on GSM8K but 0.8% on SVAMP and 1.2% on DROP for $S_{\text{comb}}^{\text{calib}}$. GSM8K `rejected` items keep high majority ratios (mean $M = 0.82$), so they pass a pooled threshold. Per-benchmark calibration or a benchmark-aware feature is required before claiming a guarantee per dataset. This is relevant to the Step 6 transfer test.
 6. **The $\tau_{0.01}$ regime is dominated by the verification-bias artifact.** $S_{\text{maj}}$ at $\tau_{0.01} = 1.0$ accepts exactly the unanimous questions (39.1%) with 0.0% observed risk, because unanimous items were never eligible for rejection. The composites reach 46–56% coverage but exceed 1% risk (1.5–2.1%). No method demonstrably meets $R \le 1\%$ with non-trivial coverage.
 7. **The safety gate adds deferrals without improving ranking.** After normalization, $S_{\text{gate}}$ caps coverage at 92.9% and leaves AURC unchanged (0.026 vs 0.024 for its base score $S_{\text{comb}}^{\text{calib}}$). On math, its triggers are mostly real errors (GSM8K 3/3, SVAMP 14/17), but these already receive low scores. On DROP, half of the 32 triggers are `revised` questions where the majority is correct and the legacy label was wrong. The gate's value is procedural (no legacy label overturned without sign-off), not a gain in risk.
 ### Empirical Cases
@@ -320,15 +320,10 @@ Table 3 is illustrative: the 4.3 example comes from Dev because only 3 majority 
 6. **The paper's rule over-reviews in a precisely identifiable place.** All 10 Eval `24-0` questions (DROP) are correct when $\hat{y}_{\text{maj}}$ is accepted: the paper reviewed them only because the legacy label was wrong. The gate keeps 2 of them for human sign-off by design.
 7. **Where the auditor fails is the consensus blind spot, now with concrete instances.** Regimes 4.3 (GSM8K #288) and 4.4 (GSM8K #146) are accepted with high confidence by every consensus-based score. These failures are shared with the paper's own heuristic, which the authors acknowledge yields only a lower bound on errors.
 ### Limitations Identified in Step 5
-- **Vote counting does not merge equivalent surface forms** (`003` vs `3` in GSM8K #288; `three` vs `3` in DROP #143), which slightly lowers $M$ and $V$ for a few questions. Normalizing predictions before voting is a candidate fix for Step 7.
+- **Vote counting does not merge equivalent surface forms** (`003` vs `3` in GSM8K #288; `three` vs `3` in DROP #143), which slightly lowers $M$ and $V$ for a few questions. Normalizing predictions before voting is a candidate fix for Step 6.
 - **Small groups:** margin buckets of 10–21 Eval questions yield wide intervals (e.g. `23-1`: [6.6%, 43.0%]); conclusions rely on totals and per-benchmark patterns.
 - **The paper-queue definition relies on the released `cleaning_status`.** It reproduces the paper's review set exactly, but it is a label column and is used only in the evaluation layer.
 ---
 
-## Step 6: Arm 2 (DROP Stress Test & Temporal Robustness)
-- *(Consensus vulnerability and perturbation results to be recorded upon completion)*
-
----
-
-## Step 7: Cross-Benchmark Generalization
+## Step 6: Cross-Benchmark Generalization
 - *(Cross-dataset transfer and final audit conclusions to be recorded upon completion)*

@@ -1,0 +1,190 @@
+=== PAGE 1 ===
+ 
+Advanced Topics in Machine Learning (M.IA009) 
+Tópicos Avançados em Aprendizagem Computacional 
+2026/2027 
+ 
+ 
+Practical Assignment  
+ 
+Learning Goals 
+ 
+1.​ Gain a deep understanding of an advanced topic in ML by means of a literature 
+review. 
+2.​ Understand the methodology for development of innovative solutions for advanced 
+ML topics. 
+ 
+Description​
+ 
+In this project the students will develop a research project on an advanced ML topic of their 
+choice. The goal is understand how reliable, innovative solutions should be developed for 
+advanced ML problems. Given a paper of their choice, the students will investigate a 
+limitation of the corresponding work. This involves a short but systematic literature review 
+on the topic and an empirical study concerning the contribution in the selected paper. Based 
+on this, students will propose an alternative solution and then empirically compare it to the 
+original approach, to assess if the limitations identified have been addressed. The results of 
+the project will be discussed with the course lecturers. 
+ 
+Workplan 
+ 
+Phase 1 – paper selection 
+-​
+Select a paper on an advanced ML topic, in collaboration with the course lecturers. 
+-​
+The paper should include code, to minimize the implementation effort. 
+-​
+Students are encouraged to select papers from topics addressed in the 
+course, but this is not mandatory. 
+-​
+Students are encouraged to select recent papers from important conferences 
+and journals in ML (e.g., NeurIPS, KDD, ICML, ICLR, ECMLPKDD, Discovery 
+Science, Intelligent Data Analysis, Machine Learning journal, Journal of 
+Machine Learning Research, Data Mining and Knowledge Discovery journal, 
+International Journal of Data Science and Analytics).​
+ 
+Phase 2 – analysis of selected contribution 
+-​
+Analyze the contribution of the selected paper to identify an interesting and relevant 
+limitation. The analysis method should be discussed with the course lecturers but it 
+usually involves: 
+
+=== PAGE 2 ===
+    ADVANCED TOPICS IN ML (M.IA009) - 2026/2027 – Assignment 
+ 
+-​
+Empirical evaluation of the contribution of the paper on a set of benchmark 
+problems.  
+-​
+Literature review, focused on the limitation of interest.  
+-​
+Given the limited time for the project, this analysis may have to be simplified.  
+-​
+Depending on the project, other methods may be more suitable.  
+ 
+Phase 3 – development of an alternative approach 
+-​
+Propose a variant that is expected to address the limitation identified. 
+-​
+Implement the proposed variant. 
+-​
+Empirically evaluate if the proposed variant adequately addresses the limitation 
+identified, using the same set of benchmark problems used to evaluate the original 
+contribution.  
+ 
+Evaluation moments 
+ 
+-​
+Checkpoint 1: Discussion of paper selected for project. This consists of a 3min 
+presentation followed by a 5min discussion with the course lecturers.  
+-​
+Checkpoint 2: Discussion of problem addressed and planned solution. This consists 
+of a 5min presentation followed by a 10min discussion with the course lecturers.  
+-​
+Project submission: Your assignment should be submitted in Moodle with a 
+compressed file containing the following items: 
+-​
+the source of a ready-to-execute notebook with all the code necessary to run 
+to obtain the presented results, including any complementary files needed to 
+execute your notebook (e.g. data files, data objects); 
+-​
+slides for presentation (PDF format) focusing on the main issues of the 
+assignment; any additional information that cannot be presented in that time 
+slot can be included as annexes to the presentation; the total number of 
+slides in the final submission, including annexes, should not exceed 40. 
+-​
+Final project discussion: This consists of an 8min presentation followed by a 12min 
+discussion with the course lecturers.  
+ 
+All checkpoints are mandatory. Any missing evaluation moment will be graded with 0. 
+The specific dates of these moments are indicated in the course schedule. 
+ 
+Groups 
+ 
+The practical assignment is mandatory and should be performed by groups of three 
+students. Please select your group in Moodle until the deadline indicated in the course 
+schedule.  
+ 
+ 
+2 / 3  
+
+=== PAGE 3 ===
+    ADVANCED TOPICS IN ML (M.IA009) - 2026/2027 – Assignment 
+ 
+Grading details 
+ 
+-​
+Checkpoint 1 - (10%) 
+-​
+Paper selection 
+-​
+Relevance of the ML topic 
+-​
+Quality of the paper 
+-​
+Checkpoint 2 - (25%) 
+-​
+Comprehension of the selected topic 
+-​
+Description of the problem 
+-​
+Description of the contribution 
+-​
+Discussion of the limitation 
+-​
+Literature review 
+-​
+Empirical study 
+-​
+experimental setup 
+-​
+analysis of results 
+-​
+Proposal to address the limitation 
+-​
+theoretical and empirical motivation 
+-​
+description 
+-​
+originality 
+-​
+Final presentation & submission - (50%) 
+-​
+Comprehension of the selected topic 
+-​
+Description of the problem 
+-​
+Description of the contribution 
+-​
+Discussion of the limitation 
+-​
+Literature review 
+-​
+Proposal to address the limitation 
+-​
+theoretical and empirical motivation 
+-​
+description 
+-​
+originality 
+-​
+ Empirical study (20%) 
+-​
+experimental setup 
+-​
+analysis of results 
+-​
+Notebook 
+-​
+organization and python implementation  
+-​
+Presentation 
+-​
+slides 
+-​
+delivery 
+-​
+Individual grade (15%) 
+-​
+An individual grade will be given to each student based on the discussion. 
+ 
+3 / 3  

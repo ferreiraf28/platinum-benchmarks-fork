@@ -12,7 +12,7 @@
 
 This document is the **operational execution guide** for implementing the research project specified in [docs/project_proposal.md](file:///Users/franciscoferreira/Library/CloudStorage/GoogleDrive-klferreira28@gmail.com/My%20Drive/MSc%20AI/TAAC/Project/platinum-benchmarks-fork/docs/project_proposal.md). 
 
-While the proposal details the academic motivation, literature review, theoretical questions (RQ1–RQ4), and hypotheses (H1–H4), this guide provides:
+While the proposal details the academic motivation, literature review, theoretical questions (RQ1–RQ3), and hypotheses (H1–H3), this guide provides:
 1. **Incremental, Step-by-Step Roadmap:** The implementation is decomposed into 7 distinct, manageable steps.
 2. **Deep Technical & Didactic Explanations:** For every module, algorithm, and equation, the rationale is documented so the team understands every design choice.
 3. **Verification & Test-Driven Validation:** Every step defines explicit sanity checks, validation tests, and "Definition of Done" (DoD) criteria before proceeding to the next stage.
@@ -23,25 +23,19 @@ While the proposal details the academic motivation, literature review, theoretic
 
 ## 2. System Architecture & Hermetic Isolation
 
-The project comprises two complementary investigative arms:
+The project architecture focuses on a Post-Hoc Selective Auditor:
 
 ```
 +---------------------------------------------------------------------------------------------------+
 |                                      RESEARCH ARCHITECTURE                                        |
 +---------------------------------------------------------------------------------------------------+
-|  ARM 1 (Core Contribution - 100% Offline):                                                        |
-|  Post-Hoc Selective Auditor for Benchmark Curation                                                |
+|  Post-Hoc Selective Auditor for Benchmark Curation (100% Offline):                                |
 |  - Operates strictly on precomputed model outputs from official cache (24 LLMs)                   |
 |  - Extracts multi-signal uncertainty (Majority, Shannon Entropy, TF-IDF CoT similarity, Length)  |
 |  - Calibrates continuous confidence score S(x) in [0, 1] on Dev Split                             |
 |  - Makes binary triage decision: ACCEPT_PROVISIONAL vs. DEFER_TO_HUMAN                            |
 |  - Evaluates Risk-Coverage curves (Layer 1) & Human Review Queue Reduction (Layer 2)              |
-+---------------------------------------------------------------------------------------------------+
-|  ARM 2 (Secondary Experiment - Robustness Analysis):                                              |
-|  Controlled Stress Test on Consensus Failures in DROP                                             |
-|  - Targets instances with 100% unanimous agreement and S(x) >= 0.95                              |
-|  - Compares Temporal Perturbation T_temp vs. Placebo Invariant T_placebo                          |
-|  - Measures Consensus-Break Rate to detect shared first-event biases                              |
+|  - Evaluates Cross-Benchmark Generalization across all 14 textual benchmarks (Step 6)             |
 +---------------------------------------------------------------------------------------------------+
 ```
 
@@ -78,10 +72,9 @@ To maintain absolute scientific validity, the code is strictly separated into tw
 | **Step 1** | Environment & Offline Loader | Cache downloaded; `src/offline_loader.py`; `src/inventory.py` | 0 API calls; complete cache inventory report | `[x]` |
 | **Step 2** | Prediction Parsers & Uncertainty Signals | `src/signals.py` (Majority, Entropy, TF-IDF CoT, Length, Hedging) | Unit tests pass; all signals bounded in $[0, 1]$ | `[x]` |
 | **Step 3** | Selective Auditor Engine & Baselines | `src/auditor.py` ($S_{\text{maj}}, S_{\text{ent}}, S_{\text{comb}}, S_{\text{gate}}$) | Decision policy verified; mandatory deferral on incomplete cache | `[x]` |
-| **Step 4** | Dev/Eval Split Protocol & Layer 1 Evaluation | `src/evaluation.py`; threshold $\tau$ calibration; RC Curves & AURC | **Table 1** generated for core benchmarks (`gsm8k`, `svamp`, `drop`) | `[ ]` |
-| **Step 5** | Layer 2: Paper Queue Triage & Error Taxonomy | Proxy `paper_flagged`; margin analysis; error regimes | **Table 2** (queue reduction) & **Table 3** (qualitative taxonomy) | `[ ]` |
-| **Step 6** | Arm 2: Controlled Stress Test in DROP | `src/stress_test.py`; 20 DROP instances; $\mathcal{T}_{\text{temp}}$ vs $\mathcal{T}_{\text{placebo}}$ | Consensus-break rate computed on local model / test harness | `[ ]` |
-| **Step 7** | Full Dataset Extension & End-to-End Notebook | `notebook.ipynb`; all 14 text datasets; artifact exports | Clean "Run All Cells" in virgin environment | `[ ]` |
+| **Step 4** | Dev/Eval Split Protocol & Layer 1 Evaluation | `src/evaluation.py`; threshold $\tau$ calibration; RC Curves & AURC | **Table 1** generated for core benchmarks (`gsm8k`, `svamp`, `drop`) | `[x]` |
+| **Step 5** | Layer 2: Paper Queue Triage & Error Taxonomy | Proxy `paper_flagged`; margin analysis; error regimes | **Table 2** (queue reduction) & **Table 3** (qualitative taxonomy) | `[x]` |
+| **Step 6** | Cross-Benchmark Generalization & End-to-End Notebook | `notebook.ipynb`; all 14 text datasets; artifact exports | Clean "Run All Cells" in virgin environment; cross-benchmark evaluation | `[ ]` |
 
 ---
 
@@ -170,7 +163,7 @@ For each question $x$ evaluated across $K$ available models:
     $$Sim_{\text{scaled}}(x) = \text{clip}\left(\frac{Sim_{\text{raw}}(x) - F_{\text{sim}}}{C_{\text{sim}} - F_{\text{sim}}}, 0.0, 1.0\right), \quad F_{\text{sim}} = 0.15, \; C_{\text{sim}} = 0.60$$
   - **Length Stability Scaling:**
     $$LS_{\text{scaled}}(x) = \text{clip}\left(\frac{LS_{\text{raw}}(x) - F_{\text{LS}}}{C_{\text{LS}} - F_{\text{LS}}}, 0.0, 1.0\right), \quad F_{\text{LS}} = 0.10, \; C_{\text{LS}} = 0.60$$
-- **Cross-Benchmark Integrity Guarantee:** These reference bounds are frozen and applied globally. They prevent data snooping and protect the purity of the 12 held-out benchmarks evaluated in Step 7, ensuring true out-of-distribution zero-shot validation. Both raw and scaled values are retained in signal bundles for full provenance.
+- **Cross-Benchmark Integrity Guarantee:** These reference bounds are frozen and applied globally. They prevent data snooping and protect the purity of the 12 held-out benchmarks evaluated in Step 6, ensuring true out-of-distribution zero-shot validation. Both raw and scaled values are retained in signal bundles for full provenance.
 
 #### 2.4 Step-by-Step Action Items
 - [x] 1. Create `src/signals.py`.
@@ -328,7 +321,7 @@ We also test **Hypothesis H3** via margin stratification ($[23-1], [22-2], [21-3
   1. *Regime 4.1 (Isolated Model Error):* Single weak model failed; auditor accepts safely.
   2. *Regime 4.2 (Mislabelled Legacy Label):* Models converged on correct solution, correcting original dataset error!
   3. *Regime 4.3 (Correlated Error):* False consensus on incorrect answer; blind auditor blind spot.
-  4. *Regime 4.4 (Shared Ambiguity / First-Event Bias):* Consensus driven by prompt heuristics; studied in Arm 2.
+  4. *Regime 4.4 (Shared Ambiguity / First-Event Bias):* Consensus driven by prompt heuristics or ambiguity.
 #### 5.3 Step-by-Step Action Items
 - [x] 1. Create `src/queue_analysis.py`.
 - [x] 2. Filter dataset to subset where `paper_flagged == True`.
@@ -350,50 +343,14 @@ python3 src/queue_analysis.py --datasets gsm8k svamp drop
 
 ---
 
-### Step 6: Arm 2 — Controlled Stress Test on Consensus in DROP
+### Step 6: Cross-Benchmark Generalization, End-to-End Notebook & Submission Packaging
 
 #### 6.1 Objective & Scientific Rationale
-Vendrow et al. observed that reading comprehension models on `DROP` exhibit a *first-event bias* (blindly selecting the earliest mentioned entity or date). If all models share this heuristic, they form a false unanimous consensus ($S(x) \approx 1.0$), creating false accepts (Regime 4.4).
-Arm 2 tests this vulnerability by applying two controlled transformations to 20 unanimous consensus instances from DROP:
-1. **Temporal Perturbation ($\mathcal{T}_{\text{temp}}$):** Reverses temporal logic (e.g. asking for the second event instead of the first), with a newly verified target $y_{\text{temp}}^*$.
-2. **Placebo Invariant Transformation ($\mathcal{T}_{\text{placebo}}$):** Inserts neutral, factually invariant sentences; target $y_{\text{placebo}}^* = y_{\text{original}}^*$.
-
-#### 6.2 Metric: Consensus-Break Rate
-$$\text{Break\_Rate}(\mathcal{T}) = \frac{1}{N} \sum_{i=1}^N \mathbb{I}(\hat{y}(\mathcal{T}(x_i)) \neq y_{\mathcal{T}}^*(x_i))$$
-If $\text{Break\_Rate}(\mathcal{T}_{\text{temp}}) \gg \text{Break\_Rate}(\mathcal{T}_{\text{placebo}})$, the initial consensus was driven by positional shortcuts rather than robust temporal reasoning.
-
-#### 6.3 Step-by-Step Action Items
-- [ ] 1. Create `src/stress_test.py`.
-- [ ] 2. Filter `drop` dataset for candidate instances:
-  - $M(x) = 1.0$ (unanimous agreement in official cache).
-  - $S(x) \ge 0.95$.
-  - Narrative contains $\ge 2$ verifiable temporal events.
-- [ ] 3. Sample 20 target questions and export to `data/stress_test_drop_sample.json`.
-- [ ] 4. Encode $\mathcal{T}_{\text{temp}}$ and $\mathcal{T}_{\text{placebo}}$ variants with manually verified new targets.
-- [ ] 5. Execute inference using local lightweight open-weights model (`Llama-3.2-1B-Instruct` or `Qwen2.5-1.5B-Instruct` via `transformers` on CPU/MPS; fallback test harness if hardware restricted).
-- [ ] 6. Compute and report break rates for both transformations.
-- [ ] 7. Save results table to `outputs/tables/table_arm2_stress_test.csv`.
-
-#### 6.4 Verification Tests
-```bash
-python3 src/stress_test.py --sample_file data/stress_test_drop_sample.json
-```
-*Expected Output:* Clear comparison of consensus-break rates between temporal perturbation and placebo controls.
-
-#### 6.5 Definition of Done (DoD)
-- 20 DROP questions sampled and perturbed with verified targets.
-- Break rates computed and analyzed.
-- Hypothesis H4 evaluated.
-
----
-
-### Step 7: Full Dataset Extension, End-to-End Notebook & Submission Packaging
-
-#### 7.1 Objective & Scientific Rationale
 With all core algorithms verified on `gsm8k`, `svamp`, and `drop`, we scale the evaluation across the remaining 11 textual benchmarks (`singleop`, `singleq`, `multiarith`, `mmlu_math`, `bbh_logical_deduction_three_objects`, `bbh_object_counting`, `bbh_navigate`, `tab_fact`, `hotpotqa`, `squad`, `winograd_wsc`).
-We consolidate the entire pipeline into a clean, reproducible Jupyter notebook (`notebook.ipynb`) meeting the academic requirements of TAAC.
+We test whether the calibrated auditor ($S_{\text{comb}}^{\text{calib}}$) and frozen decision thresholds generalize out-of-distribution across distinct reasoning domains and question formats without snooping or retraining.
+Finally, we consolidate the entire pipeline into a clean, reproducible Jupyter notebook (`notebook.ipynb`) meeting the academic requirements of TAAC.
 
-#### 7.2 Directory Structure for Final Submission
+#### 6.2 Directory Structure for Final Submission
 ```text
 submission_group_XX/
 ├── notebook.ipynb               <- Fully runnable notebook with precomputed outputs
@@ -403,7 +360,6 @@ submission_group_XX/
 │   ├── auditor.py               <- Selective auditor and decision policy
 │   ├── evaluation.py            <- Layer 1 evaluation and RC curves
 │   ├── queue_analysis.py        <- Layer 2 paper review queue reduction
-│   ├── stress_test.py           <- Arm 2 DROP perturbation analysis
 │   └── utils.py                 <- Official parsers and evaluation logic
 ├── outputs/
 │   ├── tables/                  <- CSV exports of Tables 1, 2, 3 and cache inventory
@@ -412,23 +368,24 @@ submission_group_XX/
 └── README.md                    <- Instructions for reproduction
 ```
 
-#### 7.3 Step-by-Step Action Items
+#### 6.3 Step-by-Step Action Items
 - [ ] 1. Run full evaluation across all 14 textual datasets.
-- [ ] 2. Compile aggregated cross-benchmark tables and figures.
+- [ ] 2. Compile aggregated cross-benchmark tables and figures evaluating zero-shot transfer of thresholds and weights.
 - [ ] 3. Construct `notebook.ipynb` with clear narrative headings, explanations of equations, execution blocks, and rendered charts.
 - [ ] 4. Perform fresh-environment verification ("Run All Cells" in a clean virtual environment).
 - [ ] 5. Verify that no cells require API keys or active internet connection.
 - [ ] 6. Generate presentation figures and summary data for the final slides.
 
-#### 7.4 Verification Tests
+#### 6.4 Verification Tests
 ```bash
 # Test complete notebook execution in headless mode
 jupyter nbconvert --to notebook --execute notebook.ipynb --output notebook_executed.ipynb
 ```
 *Expected Output:* Notebook executes completely from cell 1 to end with exit code 0.
 
-#### 7.5 Definition of Done (DoD)
+#### 6.5 Definition of Done (DoD)
 - All 14 text benchmarks processed.
+- Cross-benchmark generalization evaluated.
 - `notebook.ipynb` runs cleanly end-to-end.
 - Output artifacts organized and reproducible.
 

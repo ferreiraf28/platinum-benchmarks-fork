@@ -19,21 +19,18 @@ The curation methodology adopted in the base paper rests on a conservative heuri
 ### 1.2 Proposed Solution
 We propose an approach grounded in the literature on **Selective Classification / Learning to Defer** to automate triage in LLM benchmark curation:
 
-1. **Offline Post-Hoc Selective Auditor (Arm 1 — Primary Contribution):**  
-   Build an algorithmic triage system that operates strictly on the precomputed model outputs available in the paper's official public cache (`madrylab/platinum-bench-paper-cache`). The auditor extracts multiple observable uncertainty signals — majority voting margin, vote distribution entropy, and semantic textual coherence across reasoning chains (*Chain-of-Thought* / justifications) — to compute a continuous selective confidence score $S(x) \in [0, 1]$. The system operates under a strict routing policy:
-   - **High Score ($S(x) \ge \tau$):** The example is *provisionally accepted* for the benchmark, bypassing immediate human review under a controlled statistical risk ceiling.
-   - **Low Score ($S(x) < \tau$):** The example is *deferred* to the prioritized human inspection queue.
-   - **Incomplete Cache or Structural Parsing Failure:** The example is compulsorily routed to human review (`defer_mandatory`).
-
-2. **Controlled Stress Test and Sensitivity Study (Arm 2 — Secondary Experiment):**  
-   Investigate the structural blind spot of cross-model consensus. From a selected subset of instances that achieved unanimous consensus and automatic acceptance in Arm 1 (focusing specifically on the `DROP` benchmark, where Vendrow et al. identified the *first-event bias* phenomenon), we apply controlled semantic perturbations (temporal inversions with traceable answer changes) in contrast with invariant textual placebos. This arm empirically evaluates whether observed consensus reflects genuine factual solidity or shared fragility among LLMs.
+**Offline Post-Hoc Selective Auditor:**  
+Build an algorithmic triage system that operates strictly on the precomputed model outputs available in the paper's official public cache (`madrylab/platinum-bench-paper-cache`). The auditor extracts multiple observable uncertainty signals — majority voting margin, vote distribution entropy, and semantic textual coherence across reasoning chains (*Chain-of-Thought* / justifications) — to compute a continuous selective confidence score $S(x) \in [0, 1]$. The system operates under a strict routing policy:
+- **High Score ($S(x) \ge \tau$):** The example is *provisionally accepted* for the benchmark, bypassing immediate human review under a controlled statistical risk ceiling.
+- **Low Score ($S(x) < \tau$):** The example is *deferred* to the prioritized human inspection queue.
+- **Incomplete Cache or Structural Parsing Failure:** The example is compulsorily routed to human review (`defer_mandatory`).
 
 ### 1.3 Epistemological and Operational Scoping
 To ensure absolute methodological rigor, we establish the following non-negotiable premises:
 - **Triage vs. Truth Classifier:** The auditor is **not** an oracle or a classifier that certifies the mathematical or factual truth of a question. "Accepting" solely means that observable evidence across ensemble predictions does not justify allocating scarce expert human time. "Deferring" is an algorithmic queuing decision; "inspecting" is the subsequent human action.
 - **Queue Reduction as an Empirical Hypothesis:** The reduction of human review burden **is not assumed a priori**, but treated as a testable scientific hypothesis. If, under a 5% error tolerance threshold, the dispersion of disagreements prevents safe acceptance of instances with dissenting minority votes, that finding constitutes a highly valuable scientific result on the limits of observable consistency.
 - **Consolidated Project Statement:**
-  > *We investigate whether a post-hoc selective auditor, strictly blind to ground truth during inference and based solely on precomputed responses from an LLM ensemble, can automate triage in benchmark curation, reducing the human inspection queue under parametric risk constraints. We evaluate coverage and selective risk against the `platinum_target` (treated as an operational reference), measure effort reduction relative to a reproducible proxy of the original paper's rule, and analyze the fragility of unanimous consensus via a focused stress test.*
+  > *We investigate whether a post-hoc selective auditor, strictly blind to ground truth during inference and based solely on precomputed responses from an LLM ensemble, can automate triage in benchmark curation, reducing the human inspection queue under parametric risk constraints. We evaluate coverage and selective risk against the `platinum_target` (treated as an operational reference), measure effort reduction relative to a reproducible proxy of the original paper's rule, and analyze cross-benchmark generalization across diverse benchmark families.*
 
 ---
 
@@ -54,7 +51,7 @@ Where $\mathcal{M}$ is the pool of evaluated models, $\hat{y}_m$ is the predicti
 3. **Consensus Blind Spot (Correlated Errors):** If all models commit the same error induced by a systematic bias in pretraining data, the paper's heuristic considers the question valid and retains it in the benchmark without any review.
 
 ### 2.2 Theoretical Foundations in Literature
-The project anchors itself in four pillars of modern Machine Learning literature:
+The project anchors itself in three pillars of modern Machine Learning literature:
 
 ```mermaid
 flowchart TD
@@ -63,7 +60,7 @@ flowchart TD
     C["Semantic Uncertainty & Self-Consistency<br>Wang et al. (2022)<br>Kuhn et al. (2023)"] --> D
     D --> E["Layer 1: Global Selective Performance<br>(RC-Curves, AURC, Coverage)"]
     D --> F["Layer 2: Paper Queue Triage<br>(Proxy paper_flagged, Workload Reduction)"]
-    D --> G["Consensus Stress Test<br>(Dua et al. 2019, Robustness in DROP)"]
+    D --> G["Cross-Benchmark Generalization<br>(Out-of-Distribution Transfer)"]
 ```
 
 1. **Selective Classification and Learning with a Reject Option:**  
@@ -72,8 +69,6 @@ flowchart TD
    Wang et al. (2022) showed that response consistency across multiple reasoning paths is a strong predictor of correctness in complex problems (*Self-Consistency*). Kuhn et al. (2023) generalized this concept to *Semantic Uncertainty*, demonstrating that entropy computed over meaning space (rather than literal tokens) correlates with hallucinations and factual errors. In our work, because we have multiple distinct models operating at fixed temperatures ($T=0.5$ or specific defaults), we exploit cross-model consistency as a proxy for semantic stability.
 3. **Pervasive Errors in Test Sets:**  
    Northcutt et al. (2021) revealed that widely used ML benchmarks possess label error rates that destabilize global leaderboards. The work of Vendrow et al. (2025) confirms this reality for LLMs. Our project tackles the critical subsequent step: how to make sanitizing these datasets viable at large scale.
-4. **Stress Testing and Out-of-Distribution Robustness in Reading Comprehension:**  
-   Dua et al. (2019) documented that reading comprehension datasets like DROP suffer from severe positional and semantic biases. The fragility of LLMs under semantic perturbations that preserve or invert factual logic justifies the inclusion of our Arm 2.
 
 ---
 
@@ -83,13 +78,11 @@ flowchart TD
 - **RQ1 (Discriminative Power of Disagreement):** To what extent does the vote distribution across distinct models reflect the probability of an example being genuinely incorrect or ambiguous relative to the operational reference `platinum_target`?
 - **RQ2 (Efficacy of Multi-Signal Scoring):** Does a composite score integrating vote margin, Shannon entropy, and textual coherence across justifications yield a superior risk-coverage trade-off (lower AURC) compared to a naive simple-majority heuristic?
 - **RQ3 (Review Queue Reduction Capacity):** Fixing an allowable risk ceiling (e.g., $R \le 0.05$), what percentage of instances flagged by the paper's classical divergence heuristic can be safely exempted from immediate human review?
-- **RQ4 (Vulnerability of Unanimous Consensus):** Do questions exhibiting 100% agreement across models and maximum confidence scores retain their integrity under semantic temporal perturbations, or do they reveal spurious heuristics shared by models?
 
-### 3.2 Testable Hypotheses (H1 – H4)
+### 3.2 Testable Hypotheses (H1 – H3)
 - **H1 (Risk Monotonicity vs. Entropy):** The empirical risk of the majority response is a monotonically increasing function of the normalized Shannon entropy of votes ($H_{\text{norm}}(x)$).
 - **H2 (Combined Score Superiority on RC Curve):** The auditor based on the combined score $S_{\text{comb}}(x)$ achieves an area under the risk-coverage curve (AURC) strictly lower than the simple majority baseline ($S_{\text{maj}}(x)$) and the purely entropic baseline ($S_{\text{ent}}(x)$).
 - **H3 (Safe Operational Region in the Paper Queue):** Among examples flagged by the paper's proxy (`paper_flagged = True`), there exists a non-empty subset with asymmetric vote distributions (e.g., $\ge 90\%$ votes on the same answer) whose empirical acceptance risk is less than or equal to 5% ($R \le 0.05$).
-- **H4 (Asymptotic Break Rate in Consensus under Stress — Exploratory):** On reading comprehension temporal reasoning instances (`DROP`) with initial absolute consensus, controlled temporal perturbations induce a consensus-break rate significantly higher than syntactically neutral placebo modifications.
 
 ---
 
@@ -163,7 +156,7 @@ Before running any evaluation or score calculation, the team will produce an inv
 
 ---
 
-## 5. Methodology: Post-Hoc Selective Auditor (Arm 1 — Primary Contribution)
+## 5. Methodology: Post-Hoc Selective Auditor
 
 ### 5.1 Hermetic Separation between Operational Mode and Evaluation Mode
 The most severe methodological error in data auditing systems is *Label Leakage* — allowing the algorithmic triage decision direct or indirect access to the reference answer (`platinum_target`) that the system is supposed to help validate.
@@ -291,9 +284,9 @@ For each question $x$ evaluated across a pool of $K$ valid models in the cache, 
 ---
 
 #### Methodological Soundness of Dev-Set Calibration
-A central methodological priority is preventing information leakage into the 12 held-out evaluation benchmarks reserved for Step 7:
+A central methodological priority is preventing information leakage into the 12 held-out evaluation benchmarks reserved for Step 6:
 1. **Frozen Reference Bounds:** The scaling constants $(F_{\text{sim}}=0.15, C_{\text{sim}}=0.60)$ and $(F_{\text{LS}}=0.10, C_{\text{LS}}=0.60)$ are derived exclusively from the Core Development Suite ($N=850$ across `gsm8k`, `svamp`, and `drop`).
-2. **Zero Peeking at Evaluation Sets:** When evaluating out-of-distribution benchmarks in Step 7 (`squad`, `hotpotqa`, `bbh`, `tab_fact`, etc.), these exact parameters remain frozen, preserving strict zero-shot post-hoc auditing.
+2. **Zero Peeking at Evaluation Sets:** When evaluating out-of-distribution benchmarks in Step 6 (`squad`, `hotpotqa`, `bbh`, `tab_fact`, etc.), these exact parameters remain frozen, preserving strict zero-shot post-hoc auditing.
 3. **Equitable Signal Fusion:** Rescaling ensures that transparent linear baselines ($S_{\text{comb}}^{\text{baseline}} = \sum w_i s_i$) do not suffer from structural attenuation, enabling fair scientific ablation against parametric models ($S_{\text{comb}}^{\text{calib}}$).
 
 ---
@@ -435,53 +428,31 @@ In retrospective analysis, system failures are categorized under a 4-regime oper
 +-------------------+--------------------+------------------------+---------------------------------------+
 | 4.4 Shared        | [A, A, A, A]       | Target = A             | Dubious premise, but models share     |
 |     Ambiguity     | (Induced Reading)  | (Yet B equally valid   | identical training bias. False        |
-|                   |                    |  by ambiguity)         | confidence; focus of Arm 2.           |
+|                   |                    |  by ambiguity)         | confidence; consensus blind spot.     |
 +-------------------+--------------------+------------------------+---------------------------------------+
 ```
 
 ---
 
-## 7. Controlled Stress Test and Robustness Analysis (Arm 2 — Secondary Experiment)
+## 7. Cross-Benchmark Generalization and Out-of-Distribution Scaling
 
-### 7.1 Framing and Scoping
-Arm 2 is not an engineering deliverable of the same weight as Arm 1; it is an **experimental sensitivity study and epistemic robustness test** designed to investigate the vulnerability identified in Regime 4.4 (artificial consensus over ambiguities).
+### 7.1 Objective and Framing
+After developing and validating the selective auditor on the Core Development Suite (`gsm8k`, `svamp`, `drop`), a central research priority is testing whether the learned confidence calibration and decision thresholds transfer out-of-distribution to diverse benchmark families without data snooping or retraining.
 
-The base paper documented that models on reading comprehension tasks exhibit strong *first-event bias* — a systematic tendency to choose the earliest event narrated in text regardless of the question asked.
+The paper release encompasses 15 benchmarks spanning multiple cognitive tasks:
+- **Mathematical Reasoning:** `gsm8k`, `svamp`, `multiarith`, `singleop`, `singleq`, `mmlu_math`
+- **Reading Comprehension & Retrieval:** `drop`, `squad`, `hotpotqa`
+- **Symbolic, Logic & Algorithmic:** `bbh_logical_deduction_three_objects`, `bbh_object_counting`, `bbh_navigate`, `winograd_wsc`
+- **Tabular Reasoning:** `tab_fact`
 
-### 7.2 Sampling Subset and Preconditions in `DROP`
-The stress test is strictly confined to `DROP`, selecting a targeted sample of up to 20 instances satisfying:
-1. `cleaning_status != 'rejected'` in official release;
-2. Unanimous consensus in original model pool ($M(x) = 1.0$ and $H(x) = 0$);
-3. Maximum confidence score from selective auditor ($S(x) \ge 0.95$), being automatically accepted;
-4. Narrative context demonstrably contains at least two unequivocally verifiable temporal events upon manual inspection.
-
-### 7.3 Perturbation Operators: Temporal vs. Placebo
-For each selected instance, two documented deterministic transformations are applied:
-1. **Controlled Temporal Perturbation ($\mathcal{T}_{\text{temp}}$):**  
-   Syntactic and semantic modification of question prompt, replacing the search for initial event with the search for subsequent event (e.g., from *"Which event occurred first?"* to *"Which event occurred second?"* or *"What happened after [Event 1]?"*).  
-   *Quality Control:* Expected new ground truth ($y_{\text{perturbed}}^*$) is explicitly solved and annotated manually by the team before testing.
-2. **Invariant Placebo Transformation ($\mathcal{T}_{\text{placebo}}$):**  
-   Insertion of a neutral factual sentence at the end of the context (e.g., *"Note: All mentioned dates and times are historically confirmed."*), rigorously preserving semantics, chronological order, and original correct answer ($y_{\text{placebo}}^* = y_{\text{original}}^*$).
-
-```text
-[Conceptual Example in DROP]
-Context: "In 1995, Smith launched Company A. In 1998, he founded Company B."
-Original Question: "What company did Smith establish first?" -> Consensus: "Company A"
-- Temporal Perturbation: "What company did Smith establish second?" -> Verified Target: "Company B"
-- Invariant Placebo: "[Context] Note: Financial records are archived. Original Question" -> Target: "Company A"
-```
-
-### 7.4 Execution Protocol, Local Model, and Break Rate Metric
-Because perturbed variants do not exist in Vendrow et al.'s precomputed cache, inference requires active execution:
-- **Local Inference Engine:**  
-  Run with a compact open-weights model (e.g., `meta-llama/Llama-3.2-1B-Instruct` or `Qwen/Qwen2.5-1.5B-Instruct`), executed locally via `transformers` library on standard hardware (CPU or Apple Silicon MPS), with controlled temperature ($T=0.1$ for stability) and fixed seed (`seed=42`).
-- **Primary Metric — Consensus-Break Rate:**
-  $$\text{Break\_Rate}(\mathcal{T}) = \frac{\sum_{i=1}^N \mathbb{I}(\hat{y}_{\text{local}}(\mathcal{T}(x_i)) \neq y_{\mathcal{T}}^*(x_i))}{N}$$
-  If $\text{Break\_Rate}(\mathcal{T}_{\text{temp}}) \gg \text{Break\_Rate}(\mathcal{T}_{\text{placebo}})$, we show that original agreement rested on positional shortcuts rather than solid chronological understanding.
-
-### 7.5 Technical Decoupling and Execution Safeguard
-Arm 1 is completely self-contained and offline; project success does not depend on heavy compute resources for Arm 2. In case of local hardware constraints running open-weights models, the protocol includes a documented contingency plan:
-- Running perturbations through a mini-cache of 20 precomputed examples generated by the team via transparent script, or, in the last resort, structured documentary analysis of the 20 questions against error patterns identified in the appendix of Vendrow et al. (2025).
+### 7.2 Zero-Shot Cross-Benchmark Evaluation Protocol
+To guarantee strict out-of-distribution evaluation integrity:
+1. **Frozen Calibration:** The logistic fusion weights ($w$) and operational decision thresholds ($\tau_{0.05}, \tau_{0.01}$) fitted on the Dev split of the core suite are frozen.
+2. **Held-Out Evaluation:** The auditor is evaluated directly across the remaining 11 textual benchmarks.
+3. **Transfer Metrics:** For each held-out dataset, we report:
+   - Coverage $C(\tau_{0.05})$ and selective empirical risk $R(\tau_{0.05})$;
+   - Area Under the Risk-Coverage Curve (AURC) compared against $S_{\text{maj}}$ and random abstention;
+   - Paper queue reduction achieved on instances where models diverge from legacy targets.
 
 ---
 
@@ -523,10 +494,10 @@ gantt
     Build Auditor and Baselines                 :2026-10-10, 3d
     Preliminary Run on GSM8K, SVAMP, DROP       :2026-10-12, 3d
     Presentation Checkpoint 2 (5 min)           :milestone, 2026-10-14, 0d
-    section Week 3: Global Evaluation & Stress Test
+    section Week 3: Global Evaluation & Cross-Benchmark Triage
     Freeze Dev/Eval Split Protocol              :2026-10-15, 2d
     Extended Execution of Layer 1 & 2           :2026-10-17, 4d
-    Implement and Run Arm 2 (DROP)              :2026-10-18, 4d
+    Cross-Benchmark Transfer Evaluation         :2026-10-18, 4d
     Error Diagnostics and Taxonomy              :2026-10-20, 2d
     section Week 4: Consolidation & Submission
     Clean and Validate Notebook End-to-End      :2026-10-21, 3d
@@ -554,14 +525,14 @@ gantt
   - Prepare presentation for **Checkpoint 2** (5-minute presentation + 10-minute discussion);
   - **Internal Deliverable 2:** Notebook prototype with preliminary Risk-Coverage curves.
 
-#### Week 3 — Two-Layer Evaluation and Stress Test (Arm 2)
-- **Goal:** Complete global evaluation and execute DROP robustness experiment.
+#### Week 3 — Two-Layer Evaluation and Cross-Benchmark Generalization
+- **Goal:** Complete global evaluation and execute cross-benchmark generalization experiments.
 - **Tasks:**
   - Formally freeze Dev Split and Eval Split;
   - Generate consolidated Layer 1 results across all textual datasets;
   - Implement paper rule proxy (`paper_flagged`) and compute Layer 2 inspection reduction rates;
-  - Select sample of 20 consensus cases from `drop` and code Arm 2 temporal and placebo perturbations;
-  - Run local inference with lightweight open-weights model and measure consensus-break rate;
+  - Evaluate frozen auditor out-of-distribution across held-out textual benchmarks;
+  - Measure cross-benchmark coverage and risk stability;
   - **Internal Deliverable 3:** Final compiled result tables and quantitative analysis across four error regimes.
 
 #### Week 4 — Consolidation, Reproducibility, and Final Presentation
@@ -647,7 +618,6 @@ submission_group_XX.zip
 │   ├── offline_loader.py        <- Network-free cache loader
 │   ├── signals.py               <- Majority, Entropy, TF-IDF Cosine, Length extraction
 │   ├── auditor.py               <- Selective decision algorithm and calibration
-│   ├── stress_test.py           <- Temporal and placebo perturbation operators (DROP)
 │   └── utils_fork.py            <- Parsers and comparison functions from official repo
 ├── requirements.txt             <- Exact frozen dependencies
 ├── README.md                    <- Step-by-step reproduction guide
@@ -683,11 +653,7 @@ submission_group_XX.zip
 |    Majority (S_comb <= S_maj)|  Scientific Result)       | discriminatory power in LLM ensembles is a    |
 |                              |                           | valuable academic contribution!               |
 +------------------------------+---------------------------+-----------------------------------------------+
-| 5. Inability to Run Local    | Low                       | Arm 1 is self-contained. If local hardware    |
-|    Model in Arm 2 due to     | (Affects only secondary   | fails, use pre-generated 20-case mini-cache   |
-|    VRAM Constraints          |  robustness study)        | or documentary analysis.                      |
-+------------------------------+---------------------------+-----------------------------------------------+
-| 6. Accidental Label Leakage  | Extreme                   | Operational score calculation pipeline has no|
+| 5. Accidental Label Leakage  | Extreme                   | Operational score calculation pipeline has no|
 |    in Operational Pipeline   | (Complete methodological  | access to 'platinum_target' column. Target is |
 |                              |  invalidation of project) | only loaded into post-hoc evaluation module   |
 |                              |                           | for retrospective risk calculation.           |
