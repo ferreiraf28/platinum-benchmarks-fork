@@ -44,6 +44,20 @@ HF_DATASET_REPO = "madrylab/platinum-bench-paper-version"
 INVALID_PREDICTIONS = {"PARSING_ERROR", "MISSING_IN_CACHE", ""}
 
 
+def safe_to_list(val: Any) -> List[str]:
+    """Safely converts an array, list, or scalar to a List[str], avoiding numpy truth value ambiguities."""
+    if val is None:
+        return []
+    if isinstance(val, (list, tuple)):
+        return [str(x) for x in val]
+    if hasattr(val, "tolist"):
+        return [str(x) for x in val.tolist()]
+    try:
+        return [str(x) for x in val]
+    except Exception:
+        return [str(val)]
+
+
 def safe_is_correct(prediction: str, platinum_target: Optional[List[str]], dataset_name: str) -> Optional[bool]:
     """
     Wraps src/utils.py::check_prediction (the paper's official correctness rule).
@@ -140,22 +154,22 @@ def build_rows(
         }
 
         # ---------------- Legacy label block (S_gate only) ----------------
-        legacy_target = list(ex.get("original_target") or [])
+        legacy_target = safe_to_list(ex.get("original_target"))
         row["legacy_target_json"] = json.dumps(legacy_target, ensure_ascii=False)
         row["legacy_agrees_modal"] = legacy_agrees(sig["y_maj"], legacy_target)
         row["legacy_n_models_disagree"] = (
-            sum(1 for p in preds.values() if not legacy_agrees(p, legacy_target)) if legacy_target else None
+            sum(1 for p in preds.values() if not legacy_agrees(p, legacy_target)) if len(legacy_target) > 0 else None
         )
 
         # ---------------- Ground-truth block (evaluation layer only) ----------------
-        platinum_target = list(ex.get("platinum_target") or [])
+        platinum_target = safe_to_list(ex.get("platinum_target"))
         row["label_cleaning_status"] = ex.get("cleaning_status")
         row["label_platinum_target_json"] = json.dumps(platinum_target, ensure_ascii=False)
         row["label_is_correct"] = safe_is_correct(sig["y_maj"], platinum_target, dataset_name)
         # Number of individual models wrong w.r.t. platinum target (used by Step 5 paper_flagged proxy)
         row["label_n_models_wrong"] = (
             sum(1 for p in preds.values() if not safe_is_correct(p, platinum_target, dataset_name))
-            if platinum_target else None
+            if len(platinum_target) > 0 else None
         )
 
         rows.append(row)
@@ -179,6 +193,22 @@ def print_sanity_summary(df: pd.DataFrame) -> None:
     print(summary.to_string())
 
 
+def load_benchmark_examples(name: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Loads benchmark examples offline from local parquet cache if available, falling back to HuggingFace."""
+    import glob
+    snaps = glob.glob(os.path.expanduser("~/.cache/huggingface/hub/datasets--madrylab--platinum-bench-paper-version/snapshots/*"))
+    if snaps:
+        pq = glob.glob(os.path.join(snaps[0], name, "*.parquet"))
+        if pq:
+            df = pd.read_parquet(pq[0])
+            records = df.to_dict("records")
+            return records if limit is None else records[:limit]
+
+    from datasets import load_dataset
+    ds = load_dataset(HF_DATASET_REPO, name, split="test")
+    return list(ds) if limit is None else list(ds)[:limit]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Export per-question evaluation table for Step 4.")
     parser.add_argument("--datasets", nargs="+", default=CORE_BENCHMARKS)
@@ -187,14 +217,11 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="Optional cap per dataset (smoke runs).")
     args = parser.parse_args()
 
-    from datasets import load_dataset  # imported here so build_rows stays testable without HF
-
     loader = OfflineDataLoader(cache_dir=args.cache_dir)
     all_rows: List[Dict[str, Any]] = []
 
     for name in args.datasets:
-        ds = load_dataset(HF_DATASET_REPO, name, split="test")
-        examples = list(ds) if args.limit is None else list(ds)[: args.limit]
+        examples = load_benchmark_examples(name, limit=args.limit)
         print(f"[Export] {name}: {len(examples)} questions")
         all_rows.extend(build_rows(name, examples, loader, OFFICIAL_PAPER_MODELS))
 
