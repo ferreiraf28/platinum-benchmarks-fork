@@ -15,10 +15,12 @@ from sklearn.linear_model import LogisticRegression
 
 from src.cross_benchmark import (
     BENCHMARK_DOMAINS,
+    evaluate_paper_head_to_head,
     evaluate_partition,
     evaluate_queue_reduction,
     generate_table4_generalization,
     generate_table5_queue_reduction,
+    generate_table6_head_to_head,
     load_calibration_model,
 )
 
@@ -162,6 +164,19 @@ class TestCrossBenchmark(unittest.TestCase):
         self.assertIsInstance(t5, pd.DataFrame)
         self.assertGreater(len(t5), 0)
         self.assertIn("queue_reduction", t5.columns)
+
+    def test_table6_head_to_head(self):
+        """Verifies head-to-head comparison against the original paper heuristic."""
+        rows = evaluate_paper_head_to_head(self.mock_df, self.clf, self.calib_data, "MockSuite")
+        self.assertEqual(len(rows), 3)
+        self.assertEqual(rows[0]["policy"], "Paper Heuristic (Vendrow et al.)")
+        self.assertEqual(rows[0]["deferred_count"], 3)
+        self.assertEqual(rows[0]["workload_reduction_vs_paper"], 0.0)
+
+        t6 = generate_table6_head_to_head(self.mock_df, self.clf, self.calib_data)
+        self.assertIsInstance(t6, pd.DataFrame)
+        self.assertIn("false_alarms", t6.columns)
+        self.assertIn("workload_reduction_vs_paper", t6.columns)
 
 
 if __name__ == "__main__":

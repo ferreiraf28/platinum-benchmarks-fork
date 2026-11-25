@@ -16,6 +16,7 @@ Evaluates:
 Exports:
 - outputs/tables/table4_cross_benchmark_generalization.csv
 - outputs/tables/table5_cross_benchmark_queue.csv
+- outputs/tables/table6_paper_head_to_head.csv
 - outputs/figures/rc_curves_cross_benchmark.png
 
 Usage:
@@ -279,6 +280,122 @@ def generate_table5_queue_reduction(
     return pd.DataFrame(rows)
 
 
+def _compute_policy_stats(
+    accept_mask: np.ndarray,
+    errors: np.ndarray,
+    paper_deferred_count: int,
+    partition_name: str,
+    policy_name: str,
+) -> Dict[str, Any]:
+    """Computes head-to-head operational metrics for a single binary triage policy."""
+    n_total = len(errors)
+    n_errors = int(errors.sum())
+    defer_mask = ~accept_mask
+
+    n_acc = int(accept_mask.sum())
+    n_def = int(defer_mask.sum())
+
+    cov = n_acc / n_total if n_total > 0 else 0.0
+    rev_rate = n_def / n_total if n_total > 0 else 0.0
+
+    err_in_acc = int((accept_mask & errors).sum())
+    sel_risk = err_in_acc / n_acc if n_acc > 0 else 0.0
+
+    errors_caught = int((defer_mask & errors).sum())
+    error_recall = errors_caught / n_errors if n_errors > 0 else 1.0
+
+    false_alarms = int((defer_mask & (~errors)).sum())
+    false_alarm_rate = false_alarms / n_def if n_def > 0 else 0.0
+
+    workload_red = (
+        (paper_deferred_count - n_def) / paper_deferred_count
+        if paper_deferred_count > 0
+        else 0.0
+    )
+
+    return {
+        "partition": partition_name,
+        "policy": policy_name,
+        "N_total": n_total,
+        "n_errors": n_errors,
+        "accepted_count": n_acc,
+        "coverage": cov,
+        "deferred_count": n_def,
+        "review_rate": rev_rate,
+        "errors_in_accepted": err_in_acc,
+        "selective_risk": sel_risk,
+        "errors_caught": errors_caught,
+        "error_recall": error_recall,
+        "false_alarms": false_alarms,
+        "false_alarm_rate": false_alarm_rate,
+        "workload_reduction_vs_paper": workload_red,
+    }
+
+
+def evaluate_paper_head_to_head(
+    df: pd.DataFrame,
+    clf: LogisticRegression,
+    calib_data: Dict[str, Any],
+    partition_name: str,
+) -> List[Dict[str, Any]]:
+    """
+    Compares Vendrow et al. (2025) paper heuristic head-to-head against
+    Selective Auditor (S_comb_calib) and Safety-Gated Auditor (S_gate) at tau_0.05.
+    """
+    if len(df) == 0:
+        return []
+
+    pop, errors = build_error_labels(df, error_def=ERROR_DEF_CURATION)
+    scores = compute_scores(blind_view(pop), calib_model=clf)
+    errors_bool = errors.astype(bool)
+
+    accept_paper = (
+        pop["label_cleaning_status"].astype(str).str.lower() == "consensus"
+    ).to_numpy()
+    paper_deferred_count = int((~accept_paper).sum())
+
+    t_calib = calib_data["taus"]["S_comb_calib"]["0.05"]
+    accept_calib = (scores["S_comb_calib"] >= t_calib).astype(bool)
+
+    t_gate = calib_data["taus"]["S_gate"]["0.05"]
+    accept_gate = (scores["S_gate"] >= t_gate).astype(bool)
+
+    return [
+        _compute_policy_stats(
+            accept_paper, errors_bool, paper_deferred_count, partition_name, "Paper Heuristic (Vendrow et al.)"
+        ),
+        _compute_policy_stats(
+            accept_calib, errors_bool, paper_deferred_count, partition_name, "Selective Auditor (S_comb_calib)"
+        ),
+        _compute_policy_stats(
+            accept_gate, errors_bool, paper_deferred_count, partition_name, "Safety-Gated Auditor (S_gate)"
+        ),
+    ]
+
+
+def generate_table6_head_to_head(
+    df_all: pd.DataFrame,
+    clf: LogisticRegression,
+    calib_data: Dict[str, Any],
+) -> pd.DataFrame:
+    """Generates Table 6: head-to-head comparison with the original paper across suites & domains."""
+    rows: List[Dict[str, Any]] = []
+    df_core = df_all[df_all["dataset"].isin(CORE_BENCHMARKS)]
+    df_heldout = df_all[~df_all["dataset"].isin(CORE_BENCHMARKS)]
+
+    rows.extend(evaluate_paper_head_to_head(df_all, clf, calib_data, "All 14 Benchmarks (Pooled)"))
+    rows.extend(evaluate_paper_head_to_head(df_core, clf, calib_data, "Core Suite (N=850)"))
+    rows.extend(evaluate_paper_head_to_head(df_heldout, clf, calib_data, "Held-Out Suite (N=2212)"))
+
+    df_work = df_all.copy()
+    df_work["domain"] = df_work["dataset"].map(BENCHMARK_DOMAINS)
+    for domain in ["Math", "Reading / QA", "Symbolic & Logic", "Tabular"]:
+        df_domain = df_work[df_work["domain"] == domain]
+        rows.extend(evaluate_paper_head_to_head(df_domain, clf, calib_data, f"Domain: {domain}"))
+
+    return pd.DataFrame(rows)
+
+
 def plot_cross_benchmark_rc_curves(
     df_all: pd.DataFrame,
     clf: LogisticRegression,
@@ -349,6 +466,7 @@ def main():
     parser.add_argument("--calibration", default="outputs/tables/step4_calibration.json")
     parser.add_argument("--output-table4", default="outputs/tables/table4_cross_benchmark_generalization.csv")
     parser.add_argument("--output-table5", default="outputs/tables/table5_cross_benchmark_queue.csv")
+    parser.add_argument("--output-table6", default="outputs/tables/table6_paper_head_to_head.csv")
     parser.add_argument("--output-figure", default="outputs/figures/rc_curves_cross_benchmark.png")
     args = parser.parse_args()
 
@@ -375,6 +493,11 @@ def main():
     t5.to_csv(args.output_table5, index=False)
     print(f"[Done] Table 5 exported to {args.output_table5}")
 
+    print("\n[Audit] Generating Table 6 (Head-to-Head vs Original Paper)...")
+    t6 = generate_table6_head_to_head(df_all, clf, calib_data)
+    t6.to_csv(args.output_table6, index=False)
+    print(f"[Done] Table 6 exported to {args.output_table6}")
+
     print("\n[Audit] Plotting Cross-Benchmark Risk-Coverage Curves...")
     plot_cross_benchmark_rc_curves(df_all, clf, calib_data, args.output_figure)
 
@@ -389,6 +512,15 @@ def main():
     print("=" * 80)
     q_cols = ["partition", "N_total", "N_queue", "queue_pct", "queue_base_error", "queue_reduction", "queue_risk"]
     print(t5[q_cols].to_string(index=False))
+
+    print("\n" + "=" * 80)
+    print("SUMMARY RESULTS: HEAD-TO-HEAD VS ORIGINAL PAPER")
+    print("=" * 80)
+    h2h_cols = [
+        "partition", "policy", "coverage", "deferred_count", "review_rate",
+        "selective_risk", "false_alarms", "false_alarm_rate", "workload_reduction_vs_paper"
+    ]
+    print(t6[h2h_cols].to_string(index=False))
 
 
 if __name__ == "__main__":

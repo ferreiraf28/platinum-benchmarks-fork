@@ -327,8 +327,6 @@ Table 3 is illustrative: the 4.3 example comes from Dev because only 3 majority 
 
 ## Step 6: Cross-Benchmark Generalization
 
-> **Status: completed.** Implemented in [src/cross_benchmark.py](/src/cross_benchmark.py), validated by 4/4 unit tests in [tests/test_cross_benchmark.py](/tests/test_cross_benchmark.py) (82/82 repository-wide). Run: `python3 src/cross_benchmark.py`.
-
 ### Protocol & Methodological Guarantees
 - **Zero-Shot Transfer:** All model parameters (logistic weights $[M, V, Sim, LS, Hed] = [1.98, 1.58, 0.51, 0.89, 1.35]$, intercept $-2.78$) and operational decision thresholds ($\tau_{0.05} = 0.851$, $\tau_{0.01} = 0.945$) were learned strictly on the Dev split ($N=425$) of the Core Suite (`gsm8k`, `svamp`, `drop`) during Step 4. None of the 11 held-out benchmarks were seen during training.
 - **Population:** Evaluated on all **2,212 questions across 11 held-out benchmarks** (and pooled across all **3,062 questions across 14 benchmarks**), covering four distinct cognitive domains:
@@ -350,9 +348,14 @@ Direct out-of-distribution ablation across all five scoring formulations using t
 | Random Abstention | 100.0% | 10.5% | 0.1053 | n/a | No (10.5%) | n/a |
 | $S_{\text{maj}}$ (Majority Ratio) | 99.9% | 2.46% | 0.0206 | 90.9% / **5.32%** | **No (Overshoots)** | 54.0% / 0.84% |
 | $S_{\text{ent}}$ (Shannon Entropy) | 99.9% | 2.38% | 0.0206 | 90.2% / **5.31%** | **No (Overshoots)** | 54.0% / 0.84% |
-| $S_{\text{comb}}^{\text{baseline}}$ (Linear Heuristic) | 99.9% | 2.29% | 0.0172 | 90.0% / **4.87%** |  **Yes** | 55.9% / 0.97% |
-| **$S_{\text{comb}}^{\text{calib}}$ (Logistic Calibrated)** | 99.9% | **2.29%** | **0.0193** | 89.2% / **4.86%** |  **Yes** | 49.0% / 1.39% |
-| $S_{\text{gate}}$ (With Safety Gate) | 92.5% | **1.81%** | **0.0168** | 83.9% / **3.50%** |  **Yes (Most Conservative)** | 47.3% / 0.57% |
+| $S_{\text{comb}}^{\text{baseline}}$ (Linear Heuristic) | 99.9% | 2.29% | 0.0172 | 90.0% / **4.87%** | **Yes** | 55.9% / 0.97% |
+| **$S_{\text{comb}}^{\text{calib}}$ (Logistic Calibrated)** | 99.9% | **2.29%** | **0.0193** | 89.2% / **4.86%** | **Yes** | 49.0% / 1.39% |
+| $S_{\text{gate}}$ (With Safety Gate) | 92.5% | **1.81%** | **0.0168** | 83.9% / **3.50%** | **Yes (Most Conservative)** | 47.3% / 0.57% |
+
+
+* **Single-signal voting heuristics fail out-of-distribution:** Both $S_{\text{maj}}$ (**5.32%** risk) and $S_{\text{ent}}$ (**5.31%** risk) violate the 5% risk ceiling when transferred zero-shot to the 11 unseen benchmarks at their Core-calibrated $\tau_{0.05}$ thresholds. Relying solely on vote counts over-trusts unanimous or near-unanimous errors on unseen data.
+* **Multi-signal fusion regularizes out-of-sample transfer:** All three multi-signal formulations—$S_{\text{comb}}^{\text{baseline}}$ (**4.87%**), $S_{\text{comb}}^{\text{calib}}$ (**4.86%**), and $S_{\text{gate}}$ (**3.50%**) — successfully keep empirical selective risk strictly below 5% while automating **83.9%–90.0%** of the held-out questions. Adding CoT similarity, length stability, and hedging provides crucial protection against brittle vote consensus.
+* **Conservatism of the Safety Gate ($S_{\text{gate}}$):** Routing disagreements with the legacy label to humans caps maximum coverage at 92.5%, but yields the lowest AURC (**0.0168**) and drops held-out risk to **3.50%** at $\tau_{0.05}$ (and **0.57%** at $\tau_{0.01}$).
 
 ---
 
@@ -384,6 +387,15 @@ Exported to `outputs/tables/table4_cross_benchmark_generalization.csv`.
 | `hotpotqa` | Reading / QA | 250 | 26.8% | 84.0% | 18.10% | 210 / 38 | 0.0925 |
 | `squad` | Reading / QA | 250 | 36.0% | 62.4% | 12.82% | 156 / 20 | 0.1274 |
 
+#### Analysis of Table 4b: Zero-Shot Transfer & Why Text / Reading QA Requires Caution
+* **No overfitting across suites:** Comparing **Core Suite** ($N=850$: **4.63%** risk at 83.9% coverage, AURC **0.0216**) with **Held-Out Suite** ($N=2,212$: **4.86%** risk at 89.2% coverage, AURC **0.0193**) proves that the frozen weights and $\tau_{0.05}$ threshold generalize seamlessly to 11 unseen datasets, cutting AURC by **81.7%** relative to random abstention.
+* **Near-ideal triage in Math and Symbolic & Logic:** On **Math** ($N=1,312$, **3.15%** risk at 92.1% coverage) and **Symbolic & Logic** ($N=800$, **1.05%** risk at 94.9% coverage), the auditor achieves 86.2%–90.6% AURC reduction—reaching **0.00% selective risk** on `mmlu_math`, `bbh_logical_deduction`, and `bbh_navigate`.
+* **Why Reading / QA incurs 12.57% risk (up to 18.10% on `hotpotqa` and 12.82% on `squad`):** This domain-specific asymmetry stems from three structural properties of natural language comprehension benchmarks:
+  1. **Dramatically Elevated Base Defect Rate:** Unlike math/logic benchmarks (0.0%–5.7% base error), **36.0% of SQuAD** and **26.8% of HotpotQA** questions were rejected or revised during Platinum curation. With over a third of items defective, high coverage ($\ge 70\%$) faces a severe base-rate penalty.
+  2. **The Consensus Blind Spot & Correlated Shortcuts (Regimes 4.3 & 4.4):** Because modern LLMs share overlapping web-scale pre-training corpora and RLHF biases, ambiguous passages or underspecified questions cause the entire ensemble to converge on the **exact same misinterpretation**. Unanimous voting ($M=1.0$) and high CoT similarity ($Sim \approx 1.0$) yield confidence scores $>0.95$ on questions human annotators rejected—models cannot audit errors they collectively share.
+  3. **Span Rigidity & Multi-Hop Complexity:** Extractive QA relies on strict token-span matches (`squad`) and multi-step grounding (`hotpotqa`), where plausible-sounding CoT chains can drift from strict human ground truth.
+* **Engineering Guidelines:** Never apply a STEM-calibrated threshold ($\tau_{0.05}=0.851$) blindly to Reading/QA. Text comprehension suites require either a stricter threshold ($\tau \ge 0.95$, ~45–50% coverage) or mandatory safety gating ($S_{\text{gate}}$).
+
 ---
 
 ### Table 5: Paper Review Queue Reduction across Domains
@@ -399,43 +411,51 @@ Exported to `outputs/tables/table5_cross_benchmark_queue.csv`.
 | *Domain: Symbolic & Logic* | 800 | 240 | 30.0% | 9.6% | 205 | **85.4%** | **3.9%** |
 | *Domain: Tabular* | 200 | 75 | 37.5% | 37.3% | 62 | 82.7% | 25.8% |
 
----
-
-### Critical Discussion: Why Text & Reading QA Require Domain-Specific Caution
-
-A core empirical finding of Step 6 is the striking asymmetry across cognitive domains:
-* While **Math** (6 datasets, $N=1,312$) and **Symbolic & Logic** (4 datasets, $N=800$) achieve outstanding zero-shot triage reliability (empirical risks of **3.15%** and **1.05%** at over 92–95% coverage),
-* **Reading / QA** (3 datasets, $N=750$: `drop`, `squad`, `hotpotqa`) exhibits an empirical risk of **12.57%** at $\tau_{0.05}$, with individual datasets reaching **18.10%** in `hotpotqa` and **12.82%** in `squad` (Table 4b).
-
-This discrepancy is not an artifact of sample size or metric calibration; it stems from three fundamental properties of natural language comprehension benchmarks:
-
-#### 1. Dramatically Elevated Base Defect Rate
-In arithmetic and logic benchmarks (`multiarith`, `singleop`, `bbh`), the vast majority of original benchmark questions and targets were well-formed; base curation error rates in these datasets range from 0.0% to 5.7%. 
-In contrast, natural language comprehension datasets have historically suffered from high question ambiguity and brittle annotation pipelines. In our evaluated sample, **36.0% of SQuAD questions** and **26.8% of HotpotQA questions** were rejected or substantially revised during the Platinum curation process. When more than a third of the underlying dataset consists of defective or disputed items, any statistical auditor attempting high coverage ($\ge 70\%$) faces a severe base-rate penalty: even a modest false-positive rate translates into substantial selective risk.
-
-#### 2. The Consensus Blind Spot & Correlated Shortcuts (Regimes 4.3 & 4.4)
-In mathematical or symbolic reasoning, if 24 diverse models independently compute the same numeric or boolean answer, the probability of random coincidence is vanishingly small. In text comprehension, however, truth conditions are mediated by contextual natural language.
-Because modern LLMs share overlapping web-scale pre-training distributions (Common Crawl, Wikipedia, Books) and RLHF instruction-tuning paradigms, they share common inductive biases. When confronted with an ambiguous passage, an underspecified reference, or a salient distractor:
-* The entire ensemble frequently converges on the **exact same misinterpretation or surface shortcut**.
-* This generates unanimous voting agreement ($M = 1.0$), zero entropy ($H = 0$), and high chain-of-thought semantic similarity ($Sim \approx 1.0$).
-* The auditor observes near-perfect signals across all five feature dimensions and assigns confidence scores above $0.95$. 
-* Yet, human annotators rejected the question because the passage actually supported multiple mutually exclusive readings, or the question presupposed a false premise. This is the structural limit of ensemble consensus: **models cannot audit errors they all collectively share**.
-
-#### 3. Span Rigidity and Multi-Hop Complexity
-Extractive question answering benchmarks (especially `squad` and multi-hop `hotpotqa`) traditionally evaluate accuracy using exact string or token-F1 match against human-annotated spans. In zero-shot chain-of-thought generation, models often produce syntactically valid reformulations, explanatory clauses, or alternative synonyms. Conversely, in multi-hop reasoning (`hotpotqa`), models frequently chain plausible but ungrounded intermediate facts together, achieving apparent internal coherence while drifting from the human-curated ground truth.
-
-#### Practical Engineering Guidelines for Benchmark Auditing
-These findings provide clear actionable guidelines for deploying automated benchmark curation in production:
-1. **Never use a global, domain-agnostic threshold:** A confidence threshold calibrated on STEM datasets ($\tau_{0.05} = 0.851$) cannot be safely applied to open-domain text comprehension. While $\tau \approx 0.85$ safely clears 92% of math questions, reading QA datasets require either a much stricter threshold ($\tau \ge 0.95$, reducing coverage to ~45–50%) or mandatory human routing.
-2. **Mandatory Safety Gating on Disagreements:** For text datasets, enforcing the safety gate ($S_{\text{gate}}$)—which mandates human inspection whenever the majority vote diverges from the legacy label—is essential. As demonstrated in Table 4a, $S_{\text{gate}}$ brings empirical held-out risk down from 4.86% to 3.50% by intercepting silent model drift.
+#### Analysis of Table 5
+* **Scalable workload relief across unseen benchmarks:** The original paper's heuristic flagged **1,149 instances (37.5%)** across all 14 benchmarks. Our calibrated auditor safely clears **791 of those queued questions (68.8% reduction)** globally—and **71.7% (577 of 805)** on the unseen held-out suite.
+* **Consistent behavior inside the queue (15.4% vs. 16.6%):** As observed in Step 5, risk *inside* the accepted queue subset (~16.3%) is higher than global selective risk (**4.80%**) because the queue concentrates every defective item in the dataset (28.7% base error vs. 0% in unreviewed `consensus` questions). Crucially, this queue-risk profile is nearly identical between Core (**15.4%**) and Held-Out (**16.6%**).
+* **Domain contrast inside the queue:** In **Symbolic & Logic**, the paper's queue has only 9.6% base error (mostly isolated model typos), allowing the auditor to eliminate **85.4%** of the queue at just **3.9% risk**. In **Reading / QA**, the paper flagged **72.7% of all questions (545/750)** with a 36.5% base defect rate; clearing 60.6% of it yields a 20.3% queue risk, underscoring why text queues should be routed through $S_{\text{gate}}$.
 
 ---
 
-### Key Takeaways from Cross-Benchmark Generalization
-1. **Multi-signal scores strictly outperform pure voting heuristics out-of-sample:** While single-signal baselines based solely on vote counts ($S_{\text{maj}}$: **5.32%**, $S_{\text{ent}}$: **5.31%**) overshoot the 5% risk ceiling when transferring to unseen benchmarks, multi-signal scores incorporating CoT coherence and length stability ($S_{\text{comb}}^{\text{baseline}}$: **4.87%**, $S_{\text{comb}}^{\text{calib}}$: **4.86%**, $S_{\text{gate}}$: **3.50%**) successfully maintain empirical risk below 5% at ~89% coverage. This demonstrates that multi-signal fusion provides essential regularization against cross-model correlation.
-2. **Robust out-of-distribution transfer across all 14 benchmarks:** Across all 3,062 pooled questions, the calibrated threshold $\tau_{0.05}$ yields an empirical selective risk of **4.80%** at **87.8% coverage**, reducing AURC by **81.4%** compared to random abstention (0.0200 vs 0.1078).
-3. **Domain-specific asymmetry in triage safety:**
-   - On **Math** (1,312 questions) and **Symbolic & Logic** (800 questions), the auditor achieves near-ideal triage: risks drop to **3.15%** and **1.05%** at over 92–95% coverage, reducing AURC by 86–91% relative to random abstention.
-   - On **Reading / QA** (`drop`, `squad`, `hotpotqa`), models frequently agree on answers to intrinsically flawed questions (Regime 4.4 ambiguity / label noise, reaching up to 36% base error in SQuAD). As a result, the risk on accepted questions rises to **12.57%**, reaffirming the consensus blind spot identified in Step 5.
-4. **Consistent review workload savings (68.8% reduction globally):** The paper's heuristic flagged 1,149 instances for manual inspection across the 14 benchmarks (37.5% of the data). Our auditor safely clears **791 of these questions (68.8% reduction)**, demonstrating high operational scalability.
-5. **Queue risk stability:** The risk among accepted queue instances is virtually identical between the Core Suite (**15.4%**) and the Held-Out Suite (**16.6%**), confirming that the behavior of model consensus within triage queues is a stable property of LLM ensembles.
+### Table 6: Head-to-Head Operational Comparison vs. Original Paper (Vendrow et al., 2025)
+Direct comparison of the paper's conservative flagging heuristic ($\exists m : \hat{y}_m \neq y_{\text{legacy}}$) against our calibrated **Selective Auditor** ($S_{\text{comb}}^{\text{calib}}$, blind to legacy labels) and **Safety-Gated Auditor** ($S_{\text{gate}}$) at $\tau_{0.05}$. Exported to `outputs/tables/table6_paper_head_to_head.csv`.
+
+| Partition | Policy | Accepted (Coverage) | Human Reviews Required (Rate) | Workload Reduction vs. Paper | Selective Risk | False Alarms in Queue (Rate) |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
+| **All 14 Benchmarks** ($N=3,062$) | **Paper Heuristic (Vendrow et al.)** | 1,913 (62.5%) | **1,149 (37.5%)** | baseline | 0.00%* | **819 (71.3%)** |
+| | **Selective Auditor ($S_{\text{comb}}^{\text{calib}}$)** | 2,687 (87.8%) | **375 (12.2%)** | **−67.4% (3.1× less)** | **4.80%** | **174 (46.4%)** |
+| | **Safety-Gated Auditor ($S_{\text{gate}}$)** | 2,583 (84.4%) | **479 (15.6%)** | **−58.3% (2.4× less)** | **3.87%** | **249 (52.0%)** |
+| **Core Suite** ($N=850$) | Paper Heuristic (Vendrow et al.) | 506 (59.5%) | 344 (40.5%) | baseline | 0.00%* | 247 (71.8%) |
+| | Selective Auditor ($S_{\text{comb}}^{\text{calib}}$) | 713 (83.9%) | 137 (16.1%) | **−60.2%** | 4.63% | 73 (53.3%) |
+| | Safety-Gated Auditor ($S_{\text{gate}}$) | 727 (85.5%) | 123 (14.5%) | **−64.2%** | 4.81% | 61 (49.6%) |
+| **Held-Out Suite** ($N=2,212$) | **Paper Heuristic (Vendrow et al.)** | 1,407 (63.6%) | **805 (36.4%)** | baseline | 0.00%* | **572 (71.1%)** |
+| | **Selective Auditor ($S_{\text{comb}}^{\text{calib}}$)** | 1,974 (89.2%) | **238 (10.8%)** | **−70.4% (3.4× less)** | **4.86%** | **101 (42.4%)** |
+| | **Safety-Gated Auditor ($S_{\text{gate}}$)** | 1,856 (83.9%) | **356 (16.1%)** | **−55.8% (2.3× less)** | **3.50%** | **188 (52.8%)** |
+| *Math* ($N=1,312$) | Paper Heuristic | 1,023 (78.0%) | 289 (22.0%) | baseline | 0.00%* | 209 (72.3%) |
+| | Selective Auditor ($S_{\text{comb}}^{\text{calib}}$) | 1,208 (92.1%) | 104 (7.9%) | **−64.0%** | 3.15% | 62 (59.6%) |
+| | Safety-Gated Auditor ($S_{\text{gate}}$) | 1,224 (93.3%) | 88 (6.7%) | **−69.6%** | 3.51% | 51 (58.0%) |
+| *Symbolic & Logic* ($N=800$) | Paper Heuristic | 560 (70.0%) | 240 (30.0%) | baseline | 0.00%* | **217 (90.4%)** |
+| | Selective Auditor ($S_{\text{comb}}^{\text{calib}}$) | 759 (94.9%) | 41 (5.1%) | **−82.9%** | 1.05% | 26 (63.4%) |
+| | Safety-Gated Auditor ($S_{\text{gate}}$) | 766 (95.8%) | 34 (4.3%) | **−85.8%** | 0.91% | 18 (52.9%) |
+| *Reading / QA* ($N=750$) | Paper Heuristic | 205 (27.3%) | **545 (72.7%)** | baseline | 0.00%* | 346 (63.5%) |
+| | Selective Auditor ($S_{\text{comb}}^{\text{calib}}$) | 533 (71.1%) | 217 (28.9%) | **−60.2%** | 12.57% | 85 (39.2%) |
+| | Safety-Gated Auditor ($S_{\text{gate}}$) | 410 (54.7%) | 340 (45.3%) | **−37.6%** | 8.78% | 177 (52.1%) |
+| *Tabular* ($N=200$) | Paper Heuristic | 125 (62.5%) | 75 (37.5%) | baseline | 0.00%* | 47 (62.7%) |
+| | Selective Auditor ($S_{\text{comb}}^{\text{calib}}$) | 187 (93.5%) | 13 (6.5%) | **−82.7%** | 8.56% | 1 (7.7%) |
+| | Safety-Gated Auditor ($S_{\text{gate}}$) | 183 (91.5%) | 17 (8.5%) | **−77.3%** | 7.65% | 3 (17.6%) |
+
+*\*Note: The paper heuristic records 0.00% observable selective risk on accepted (`consensus`) questions by construction, because Vendrow et al. (2025) never manually audited `consensus` instances; as established in Step 5, correlated ensemble errors (Regimes 4.3–4.4) remain unmeasured inside that subset.*
+
+#### Analysis of Table 6: Head-to-Head Comparison
+* **3× Reduction in Total Human Annotation Burden:** Across all 3,062 benchmark questions, the original paper's heuristic requires **1,149 manual inspections (37.5% of the dataset)**. Our blind Selective Auditor ($S_{\text{comb}}^{\text{calib}}$) reduces required human reviews to **375 (12.2%)**—a **67.4% global workload reduction** (**70.4%** on the 11 unseen held-out benchmarks, cutting reviews from 805 to 238)—while maintaining empirical selective risk strictly below 5% (**4.80%** pooled, **4.86%** held-out).
+* **Eliminating Severe Over-Reviewing (False Alarms):** Under the paper's rule, **71.3% of all human inspections (819 out of 1,149)** were false alarms where the majority answer was already valid and the question was not rejected. In **Symbolic & Logic**, **90.4% (217 of 240)** of human inspections were unnecessary; our auditor cuts Symbolic & Logic reviews by **82.9%–85.8%** (down to 34–41 items) at $\le 1.05\%$ selective risk.
+* **Blind Automation vs. Safety Gating ($S_{\text{comb}}^{\text{calib}}$ vs. $S_{\text{gate}}$):** When legacy targets are available during curation, $S_{\text{gate}}$ trades a modest increase in human reviews (479 vs. 375 globally, still **58.3% fewer** than the paper) to push global selective risk down to **3.87%** (**3.50%** on held-out). Crucially, on **Reading / QA**, $S_{\text{gate}}$ lowers selective risk from 12.57% to **8.78%** and raises defect recall from **66.3%** to **81.9%**.
+
+---
+
+### Summary Synthesis of Step 6
+1. **Zero-shot generalization holds:** Frozen Core Dev parameters transfer to 11 unseen benchmarks with **4.86% selective risk at 89.2% coverage** (**81.7% AURC reduction**).
+2. **Multi-signal scoring is required out-of-distribution:** Pure voting heuristics ($S_{\text{maj}}, S_{\text{ent}}$) fail the 5% risk target out-of-sample, whereas multi-signal scores ($S_{\text{comb}}^{\text{calib}}, S_{\text{gate}}$) succeed.
+3. **Domain-aware deployment is essential:** Math and Symbolic & Logic can be safely audited at $>92\%$ coverage ($\le 3.2\%$ risk), whereas Reading / QA requires stricter thresholds or Safety Gating due to higher base defect rates and correlated LLM blind spots.
+4. **3× operational efficiency over Vendrow et al. (2025):** The auditor cuts manual annotation workload by **67.4%** globally (**70.4%** held-out) and slashes wasted false-alarm reviews from 819 down to 174.
